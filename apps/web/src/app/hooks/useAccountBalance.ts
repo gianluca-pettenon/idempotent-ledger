@@ -1,31 +1,40 @@
 import { useEffect, useState } from 'react';
 
 import { fetchAccount } from '@/app/lib/api';
+import type { Transaction } from '@/app/types';
 
-async function fetchBalance(userId: string) {
+async function fetchAccountData(userId: string) {
   if (!userId) {
-    return null;
+    return { balance: null, transactions: [] as Transaction[] };
   }
 
   const { account } = await fetchAccount(userId);
 
-  return account.balance;
+  return {
+    balance: account.balance,
+    transactions: account.transactions,
+  };
 }
 
 export function useAccountBalance(userId: string) {
   const [balance, setBalance] = useState<number | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   async function refresh() {
-    const nextBalance = await fetchBalance(userId);
+    const { balance, transactions } = await fetchAccountData(userId);
 
-    setBalance(nextBalance);
+    setBalance(balance);
+    setTransactions(transactions);
   }
 
   useEffect(
     () => {
-      void fetchBalance(userId).then(setBalance);
-    }, [userId],
+      void fetchAccountData(userId).then((account) => {
+        setBalance(account.balance);
+        setTransactions(account.transactions);
+      });
+    }, [userId]
   );
 
-  return { balance, refresh };
+  return { balance, transactions, refresh };
 }

@@ -7,8 +7,18 @@ export type User = {
   name: string;
 };
 
+export type Transaction = {
+  id: string;
+  type: 'deposit' | 'withdraw' | 'transfer_in' | 'transfer_out';
+  amount: number;
+  createdAt: string;
+  counterpartyUserId?: string;
+  counterpartyName?: string;
+};
+
 export type Account = {
   balance: number;
+  transactions: Transaction[];
 };
 
 export type RunEntry = {
