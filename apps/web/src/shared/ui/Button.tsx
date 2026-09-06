@@ -15,17 +15,16 @@ type ButtonProps = ComponentProps<'button'> & {
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'rounded-lg border border-transparent bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:brightness-105',
+    'border-transparent bg-primary text-primary-foreground hover:brightness-105',
   secondary:
-    'rounded-lg border border-border bg-muted px-4 py-2.5 font-medium text-foreground hover:border-ring',
+    'border-border bg-secondary text-secondary-foreground hover:border-border-strong hover:bg-secondary/92',
   danger:
-    'rounded-lg border border-transparent bg-danger px-4 py-2.5 font-medium text-danger-foreground hover:brightness-105',
-  info:
-    'rounded-lg border border-transparent bg-info px-4 py-2.5 font-medium text-info-foreground hover:brightness-105',
+    'border-transparent bg-danger text-danger-foreground hover:brightness-105',
+  info: 'border-transparent bg-info text-info-foreground hover:brightness-105',
   outline:
-    'rounded-lg border border-border bg-background/50 px-4 py-2.5 font-medium text-muted-foreground hover:border-ring hover:text-foreground',
+    'border-border bg-background/50 text-muted-foreground hover:border-ring/60 hover:bg-muted/80 hover:text-foreground',
   ghost:
-    'h-auto w-full justify-start rounded-md border-0 bg-transparent px-3 py-2 font-normal text-left text-foreground hover:bg-muted/80',
+    'h-auto w-full justify-start rounded-2xl border border-transparent bg-transparent px-3 py-2.5 text-left font-normal text-foreground hover:border-border/70 hover:bg-muted/80',
 };
 
 export function Button({
@@ -38,7 +37,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        'text-sm transition disabled:cursor-not-allowed disabled:opacity-40',
+        'inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium tracking-[-0.01em] transition duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/10 disabled:cursor-not-allowed disabled:opacity-40',
         variantStyles[variant],
         className,
       )}

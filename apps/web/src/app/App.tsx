@@ -50,18 +50,19 @@ export function App() {
     <>
       <AccountSelector users={users} userId={userId} onChange={setUserId} />
 
-      <main className="container py-6 sm:py-8">
+      <main className="container py-6 sm:py-8 lg:py-10">
         <section className="space-y-4">
-          <div className="space-y-1">
-            <p className="text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
-              {CONCURRENCY.DRAWER.TITLE}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {CONCURRENCY.DRAWER.DESCRIPTION}
-            </p>
+          <div className="panel relative overflow-hidden px-5 py-5 sm:px-6 sm:py-6">
+            <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/12 blur-3xl" />
+            <div className="absolute top-8 right-20 h-24 w-24 rounded-full bg-info/12 blur-3xl" />
+
+            <div className="relative space-y-1">
+              <p className="eyebrow">{CONCURRENCY.DRAWER.TITLE}</p>
+              <p className="section-copy">{CONCURRENCY.DRAWER.DESCRIPTION}</p>
+            </div>
           </div>
 
-          <div className="split-layout">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <OperationForm
               operation={operation}
               running={running}

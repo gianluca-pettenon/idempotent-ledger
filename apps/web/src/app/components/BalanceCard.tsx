@@ -7,11 +7,9 @@ type BalanceCardProps = {
 
 export function BalanceCard({ balance }: BalanceCardProps) {
   return (
-    <aside className="balance-card balance-card-sticky order-1 lg:order-2">
-      <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-        {ACCOUNT.BALANCE_LABEL}
-      </p>
-      <p className="mt-3 font-mono text-4xl font-medium tracking-tight tabular-nums sm:text-5xl">
+    <aside className="panel h-fit px-6 py-5 lg:sticky lg:top-[calc(var(--height-topbar)+1.5rem)]">
+      <p className="eyebrow">{ACCOUNT.BALANCE_LABEL}</p>
+      <p className="mt-4 font-mono text-4xl font-semibold tracking-[-0.05em] tabular-nums sm:text-5xl">
         {balance === null ? '—' : formatUsd(balance)}
       </p>
     </aside>

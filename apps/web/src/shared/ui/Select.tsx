@@ -39,7 +39,10 @@ export function Select({
   }, [open]);
 
   return (
-    <div ref={containerRef} className={cn('relative w-full min-w-[10rem]', className)}>
+    <div
+      ref={containerRef}
+      className={cn('relative w-full min-w-[10rem]', className)}
+    >
       <Button
         variant="outline"
         disabled={disabled}
@@ -55,7 +58,7 @@ export function Select({
       </Button>
 
       {open ? (
-        <ul id={listboxId} role="listbox" className="select-menu">
+        <ul id={listboxId} className="select-menu">
           {options.map((option) => (
             <Option
               key={option.value}

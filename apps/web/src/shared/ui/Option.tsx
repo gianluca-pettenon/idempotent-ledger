@@ -13,10 +13,11 @@ type OptionProps = SelectOption & {
 
 export function Option({ label, selected, onSelect }: OptionProps) {
   return (
-    <li role="option" aria-selected={selected}>
+    <li>
       <Button
         variant="ghost"
         onClick={onSelect}
+        aria-pressed={selected}
         className={cn(selected && 'select-option-selected')}
       >
         {label}

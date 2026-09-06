@@ -17,13 +17,13 @@ export function AccountSelector({
   const options = users.map((user) => ({ value: user.id, label: user.name }));
 
   return (
-    <header className="sticky top-0 z-10 overflow-visible border-b border-border/80 bg-background/80 backdrop-blur-md">
-      <div className="container flex min-h-[var(--height-topbar)] items-center">
-        <div className="flex w-full flex-col gap-1.5 text-sm sm:ml-auto sm:w-auto sm:min-w-[12rem]">
-          <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-            {ACCOUNT.LABEL}
-          </span>
-          <Select value={userId} onChange={onChange} options={options} />
+    <header className="sticky top-0 z-20 border-b border-border/60 bg-background/70 backdrop-blur-xl">
+      <div className="container flex min-h-[var(--height-topbar)] items-center justify-end py-4">
+        <div className="w-full max-w-sm">
+          <div className="flex flex-col gap-2 text-sm">
+            <span className="eyebrow">{ACCOUNT.LABEL}</span>
+            <Select value={userId} onChange={onChange} options={options} />
+          </div>
         </div>
       </div>
     </header>
