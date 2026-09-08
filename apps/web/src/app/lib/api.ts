@@ -57,86 +57,51 @@ async function request<T>(path: string, options: RequestOptions = {}) {
   return response.json() as Promise<T>;
 }
 
-function normalizeAccount(response: AccountResponse): Account {
-  if (response.account) {
-    return response.account;
-  }
-
-  return {
-    balance: response.balance ?? 0,
-    transactions: response.transactions ?? [],
-  };
-}
-
-function createRequestId() {
-  return crypto.randomUUID();
-}
-
-function createIdempotencyKey(withIdempotencyKey: boolean) {
-  if (!withIdempotencyKey) {
-    return null;
-  }
-
-  return crypto.randomUUID();
-}
-
-function getRequestPath({ operation, userId }: Pick<RunRequestParams, 'operation' | 'userId'>) {
-  if (operation === OperationKind.Transfer) {
-    return '/transfers';
-  }
-
-  return `/accounts/${userId}/transactions`;
-}
-
-function getRequestBody({ operation, userId, toUserId, amount }: Omit<RunRequestParams, 'withIdempotencyKey'>) {
-  if (operation === OperationKind.Transfer) {
-    return {
-      fromUserId: userId,
-      toUserId,
-      amount,
-    };
-  }
-
-  return {
-    type: operation,
-    amount,
-  };
-}
-
 async function runRequest(
   params: Omit<RunRequestParams, 'withIdempotencyKey'>,
   requestIndex: number,
   idempotencyKey: string | null,
 ): Promise<RunEntry> {
   const startedAt = performance.now();
+  const label = `Request ${requestIndex + 1}`;
+  const path =
+    params.operation === OperationKind.Transfer
+      ? '/transfers'
+      : `/accounts/${params.userId}/transactions`;
+  const body =
+    params.operation === OperationKind.Transfer
+      ? {
+          fromUserId: params.userId,
+          toUserId: params.toUserId,
+          amount: params.amount,
+        }
+      : {
+          type: params.operation,
+          amount: params.amount,
+        };
+  let outcome = 'failed';
 
   try {
-    const response = await request<TransactionResponse>(getRequestPath(params), {
+    const response = await request<TransactionResponse>(path, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Request-Id': createRequestId(),
+        'X-Request-Id': crypto.randomUUID(),
         ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       },
-      body: JSON.stringify(getRequestBody(params)),
+      body: JSON.stringify(body),
     });
 
-    const duration = Math.round(performance.now() - startedAt);
-
-    return {
-      label: `Request ${requestIndex + 1}`,
-      outcome: response.meta?.outcome ?? 'processed',
-      ms: duration,
-    };
+    outcome = response.meta?.outcome ?? 'processed';
   } catch {
-    const duration = Math.round(performance.now() - startedAt);
-
-    return {
-      label: `Request ${requestIndex + 1}`,
-      outcome: 'failed',
-      ms: duration,
-    };
+    // Keep failed as the fallback outcome for any request error.
   }
+
+  return {
+    label,
+    outcome,
+    ms: Math.round(performance.now() - startedAt),
+  };
 }
 
 export async function fetchUsers() {
@@ -146,13 +111,20 @@ export async function fetchUsers() {
 export async function fetchAccount(userId: string) {
   const response = await request<AccountResponse>(`/accounts/${userId}`);
 
+  if (response.account) {
+    return { account: response.account };
+  }
+
   return {
-    account: normalizeAccount(response),
+    account: {
+      balance: response.balance ?? 0,
+      transactions: response.transactions ?? [],
+    } satisfies Account,
   };
 }
 
 export async function runConcurrentRequests(params: RunRequestParams) {
-  const idempotencyKey = createIdempotencyKey(params.withIdempotencyKey);
+  const idempotencyKey = params.withIdempotencyKey ? crypto.randomUUID() : null;
   const requestParams = {
     operation: params.operation,
     userId: params.userId,

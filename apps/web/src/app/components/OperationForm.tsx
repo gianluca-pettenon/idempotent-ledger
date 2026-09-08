@@ -2,7 +2,7 @@ import { OPERATION_KINDS, OperationKind } from '@banking-ledger/shared';
 import { CONCURRENCY, FORM, OPERATION } from '@banking-ledger/terms';
 
 import type { Operation, RunEntry, User } from '@/app/types';
-import { Button, type ButtonVariant, Input, Select } from '@/shared/ui';
+import { Button, type ButtonVariant, Select } from '@/shared/ui';
 
 import { RequestResults } from './RequestResults';
 
@@ -79,11 +79,12 @@ export function OperationForm({
           <span className="text-muted-foreground">
             {FORM.AMOUNT_PER_REQUEST}
           </span>
-          <Input
+          <input
             aria-label={FORM.AMOUNT_PER_REQUEST}
+            autoComplete="off"
             value={amount}
             onChange={(event) => onAmountChange(event.target.value)}
-            className="font-mono tabular-nums"
+            className="input font-mono tabular-nums"
           />
         </div>
 

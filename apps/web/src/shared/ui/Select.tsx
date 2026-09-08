@@ -1,7 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react';
 import { cn } from '@/shared/lib/cn';
-import { Button } from '@/shared/ui/Button';
-import { Option, type SelectOption } from '@/shared/ui/Option';
+
+export type SelectOption = {
+  value: string;
+  label: string;
+};
 
 type SelectProps = {
   value: string;
@@ -20,58 +22,25 @@ export function Select({
   className,
   placeholder = 'Select...',
 }: SelectProps) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const listboxId = useId();
-  const selected = options.find((option) => option.value === value);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function handlePointerDown(event: PointerEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    return () => document.removeEventListener('pointerdown', handlePointerDown);
-  }, [open]);
+  const hasPlaceholder = placeholder.length > 0;
 
   return (
-    <div
-      ref={containerRef}
-      className={cn('relative w-full min-w-[10rem]', className)}
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      disabled={disabled}
+      className={cn('input select-trigger min-w-[10rem]', className)}
     >
-      <Button
-        variant="outline"
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={listboxId}
-        onClick={() => setOpen((current) => !current)}
-        className={cn('select-trigger', open && 'select-trigger-open')}
-      >
-        <span className={cn(!selected && 'text-muted-foreground')}>
-          {selected?.label ?? placeholder}
-        </span>
-      </Button>
-
-      {open ? (
-        <ul id={listboxId} className="select-menu">
-          {options.map((option) => (
-            <Option
-              key={option.value}
-              {...option}
-              selected={option.value === value}
-              onSelect={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-            />
-          ))}
-        </ul>
+      {hasPlaceholder ? (
+        <option value="" disabled>
+          {placeholder}
+        </option>
       ) : null}
-    </div>
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   );
 }

@@ -3,9 +3,14 @@ import { useEffect, useState } from 'react';
 import { fetchAccount } from '@/app/lib/api';
 import type { Transaction } from '@/app/types';
 
+type AccountState = {
+  balance: number | null;
+  transactions: Transaction[];
+};
+
 async function fetchAccountData(userId: string) {
   if (!userId) {
-    return { balance: null, transactions: [] as Transaction[] };
+    return { balance: null, transactions: [] } satisfies AccountState;
   }
 
   const { account } = await fetchAccount(userId);
@@ -17,24 +22,21 @@ async function fetchAccountData(userId: string) {
 }
 
 export function useAccountBalance(userId: string) {
-  const [balance, setBalance] = useState<number | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [account, setAccount] = useState<AccountState>({
+    balance: null,
+    transactions: [],
+  });
 
   async function refresh() {
-    const { balance, transactions } = await fetchAccountData(userId);
-
-    setBalance(balance);
-    setTransactions(transactions);
+    setAccount(await fetchAccountData(userId));
   }
 
   useEffect(
     () => {
-      void fetchAccountData(userId).then((account) => {
-        setBalance(account.balance);
-        setTransactions(account.transactions);
-      });
-    }, [userId]
+      void refresh();
+    },
+    [userId],
   );
 
-  return { balance, transactions, refresh };
+  return { ...account, refresh };
 }

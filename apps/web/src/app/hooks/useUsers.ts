@@ -3,25 +3,20 @@ import { useEffect, useState } from 'react';
 import { fetchUsers } from '@/app/lib/api';
 import type { User } from '@/app/types';
 
-async function fetchUserList() {
-  const { users } = await fetchUsers();
-
-  return users;
-}
-
 export function useUsers() {
   const [users, setUsers] = useState<User[]>([]);
   const [userId, setUserId] = useState('');
 
   useEffect(
     () => {
-      void fetchUserList().then((nextUsers) => {
-        const [firstUser] = nextUsers;
+      void fetchUsers().then(({ users }) => {
+        const [firstUser] = users;
 
-        setUsers(nextUsers);
+        setUsers(users);
         setUserId(firstUser?.id ?? '');
       });
-    }, [],
+    },
+    [],
   );
 
   return { users, userId, setUserId };
