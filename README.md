@@ -23,7 +23,7 @@ banking-ledger/
 ├── packages/
 │   └── db/           # Shared database client & schema (planned)
 ├── docker-compose.yml
-├── Dockerfile        # API production image
+├── Dockerfile        # API container image
 └── .env              # Local environment (not committed)
 ```
 
@@ -92,6 +92,11 @@ bun run --filter '@banking-ledger/web' format
 ```bash
 docker compose up --build
 ```
+
+This starts:
+
+- PostgreSQL on `POSTGRES_PORT`
+- API on `API_PORT`
 
 ## Conventions
 

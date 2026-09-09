@@ -7,7 +7,7 @@
     "dev": "bun --env-file=.env --parallel run dev:api dev:web",
     "dev:api": "bun --hot --env-file=.env apps/api/src/server.ts",
     "dev:web": "bun --env-file=.env run --filter '@banking-ledger/web' dev",
-    "start": "bun --env-file=.env apps/api/server.ts",
+    "start": "bun --env-file=.env apps/api/src/server.ts",
     "db:generate": "bun --env-file=.env x drizzle-kit generate --config=packages/db/drizzle.config.ts",
     "db:migrate": "bun --env-file=.env x drizzle-kit migrate --config=packages/db/drizzle.config.ts",
     "db:push": "bun --env-file=.env x drizzle-kit push --config=packages/db/drizzle.config.ts",
