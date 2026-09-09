@@ -98,9 +98,10 @@ export function OperationForm({
             {running ? CONCURRENCY.RUNNING : CONCURRENCY.WITH_IDEMPOTENCY}
           </Button>
           <Button
+            variant="outline"
             disabled={running}
             onClick={() => onRun(false)}
-            className="w-full"
+            className="w-full border-white/80 bg-transparent text-white hover:border-white hover:bg-white hover:!text-black active:bg-white/90 active:!text-black"
           >
             {running ? CONCURRENCY.RUNNING : CONCURRENCY.WITHOUT_PROTECTION}
           </Button>

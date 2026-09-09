@@ -35,8 +35,8 @@ export const CONCURRENCY = {
   COMPARE_NOTE: 'Compare protected vs unprotected behavior.',
   OPERATION: 'Operation',
   RUNNING: 'Running...',
-  WITH_IDEMPOTENCY: 'With idempotency key',
-  WITHOUT_PROTECTION: 'Without protection',
+  WITH_IDEMPOTENCY: 'With Idempotency',
+  WITHOUT_PROTECTION: 'Without Protection',
   RUN_SCENARIO: 'Run a scenario',
   RUN_SCENARIO_HINT:
     'Pick deposit, withdraw, or transfer — then see how many requests were sent, processed, or deduplicated.',
