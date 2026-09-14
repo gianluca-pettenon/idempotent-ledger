@@ -8,55 +8,24 @@ type BalanceCardProps = {
   transactions: Transaction[];
 };
 
+const OUTGOING_TYPES: ReadonlySet<Transaction['type']> = new Set(['withdraw', 'transfer_out']);
+
+const TRANSACTION_LABEL: Record<Transaction['type'], (counterpartyName?: string) => string> = {
+  deposit: () => STATEMENT.BADGE.DEPOSIT,
+  withdraw: () => STATEMENT.BADGE.WITHDRAWAL,
+  transfer_in: (counterpartyName) => counterpartyName ? STATEMENT.transferFrom(counterpartyName) : STATEMENT.INCOMING_TRANSFER,
+  transfer_out: (counterpartyName) => counterpartyName ? STATEMENT.transferTo(counterpartyName) : STATEMENT.OUTGOING_TRANSFER,
+};
+
 function getTransactionViewModel(transaction: Transaction) {
   const formattedAmount = formatUsd(transaction.amount);
-  const { counterpartyName } = transaction;
+  const outgoing = OUTGOING_TYPES.has(transaction.type);
 
-  switch (transaction.type) {
-    case 'deposit':
-      return {
-        label: STATEMENT.BADGE.DEPOSIT,
-        amount: formattedAmount,
-        amountClassName: 'text-info',
-      };
-
-    case 'withdraw':
-      return {
-        label: STATEMENT.BADGE.WITHDRAWAL,
-        amount: `-${formattedAmount}`,
-        amountClassName: 'text-danger',
-      };
-
-    case 'transfer_in':
-      if (counterpartyName) {
-        return {
-          label: STATEMENT.transferFrom(counterpartyName),
-          amount: formattedAmount,
-          amountClassName: 'text-info',
-        };
-      }
-
-      return {
-        label: STATEMENT.INCOMING_TRANSFER,
-        amount: formattedAmount,
-        amountClassName: 'text-info',
-      };
-
-    case 'transfer_out':
-      if (counterpartyName) {
-        return {
-          label: STATEMENT.transferTo(counterpartyName),
-          amount: `-${formattedAmount}`,
-          amountClassName: 'text-danger',
-        };
-      }
-
-      return {
-        label: STATEMENT.OUTGOING_TRANSFER,
-        amount: `-${formattedAmount}`,
-        amountClassName: 'text-danger',
-      };
-  }
+  return {
+    label: TRANSACTION_LABEL[transaction.type](transaction.counterpartyName),
+    amount: outgoing ? `-${formattedAmount}` : formattedAmount,
+    amountClassName: outgoing ? 'text-danger' : 'text-info',
+  };
 }
 
 export function BalanceCard({ balance, transactions }: BalanceCardProps) {

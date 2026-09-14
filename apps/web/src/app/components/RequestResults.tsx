@@ -6,16 +6,15 @@ type RequestResultsProps = {
   entries: RunEntry[];
 };
 
+const OUTCOME_CLASSNAME: Record<string, string> = {
+  processed: 'border-primary/30 bg-primary/10 text-primary',
+  duplicate: 'border-info/30 bg-info/10 text-info',
+};
+
+const FAILED_OUTCOME_CLASSNAME = 'border-destructive/30 bg-destructive/10 text-destructive-foreground';
+
 function getOutcomeClassName(outcome: string) {
-  if (outcome === 'processed') {
-    return 'border-primary/30 bg-primary/10 text-primary';
-  }
-
-  if (outcome === 'duplicate') {
-    return 'border-info/30 bg-info/10 text-info';
-  }
-
-  return 'border-destructive/30 bg-destructive/10 text-destructive-foreground';
+  return OUTCOME_CLASSNAME[outcome] ?? FAILED_OUTCOME_CLASSNAME;
 }
 
 export function RequestResults({ entries }: RequestResultsProps) {

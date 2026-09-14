@@ -26,6 +26,23 @@ type RunRequestParams = {
   withIdempotencyKey: boolean;
 };
 
+type MovementRequestParams = Omit<RunRequestParams, 'withIdempotencyKey'>;
+
+const REQUEST_BUILDER: Record<Operation, (params: MovementRequestParams) => { path: string; body: unknown }> = {
+  [OperationKind.Deposit]: (params) => ({
+    path: `/accounts/${params.userId}/transactions`,
+    body: { type: OperationKind.Deposit, amount: params.amount },
+  }),
+  [OperationKind.Withdraw]: (params) => ({
+    path: `/accounts/${params.userId}/transactions`,
+    body: { type: OperationKind.Withdraw, amount: params.amount },
+  }),
+  [OperationKind.Transfer]: (params) => ({
+    path: '/transfers',
+    body: { fromUserId: params.userId, toUserId: params.toUserId, amount: params.amount },
+  }),
+};
+
 function getApiBaseUrl() {
   const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 
@@ -56,27 +73,13 @@ async function request<T>(path: string, options: RequestOptions = {}) {
 }
 
 async function runRequest(
-  params: Omit<RunRequestParams, 'withIdempotencyKey'>,
+  params: MovementRequestParams,
   requestIndex: number,
   idempotencyKey: string | null,
 ): Promise<RunEntry> {
   const startedAt = performance.now();
   const label = `Request ${requestIndex + 1}`;
-  const path =
-    params.operation === OperationKind.Transfer
-      ? '/transfers'
-      : `/accounts/${params.userId}/transactions`;
-  const body =
-    params.operation === OperationKind.Transfer
-      ? {
-          fromUserId: params.userId,
-          toUserId: params.toUserId,
-          amount: params.amount,
-        }
-      : {
-          type: params.operation,
-          amount: params.amount,
-        };
+  const { path, body } = REQUEST_BUILDER[params.operation](params);
   let outcome = 'failed';
   let detail: string | undefined;
 

@@ -14,7 +14,7 @@ export function AccountSelector({
   userId,
   onChange,
 }: AccountSelectorProps) {
-  const options = users.map((user) => ({ value: user.id, label: user.name }));
+  const options = users.map(({ id, name }) => ({ value: id, label: name }));
 
   return (
     <header className="sticky top-0 z-20 border-b border-border/60 bg-background/70 backdrop-blur-xl">

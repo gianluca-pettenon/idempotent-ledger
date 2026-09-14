@@ -14,24 +14,27 @@ const HttpStatus = {
 	UnprocessableEntity: 422,
 } as const;
 
+const ERROR_STATUS = new Map<new (...args: never[]) => Error, number>([
+	[AccountNotFoundError, HttpStatus.NotFound],
+	[InsufficientBalanceError, HttpStatus.UnprocessableEntity],
+	[SameAccountTransferError, HttpStatus.UnprocessableEntity],
+	[InvalidAmountError, HttpStatus.BadRequest],
+	[IdempotencyKeyReusedError, HttpStatus.Conflict],
+	[OptimisticLockError, HttpStatus.Conflict],
+]);
+
 function respond(status: number, message: string) {
 	return new Response(JSON.stringify({ success: false, message }), { status });
 }
 
 export function mapDomainErrors({ error }: { error: unknown }) {
-	if (error instanceof AccountNotFoundError) {
-		return respond(HttpStatus.NotFound, error.message);
+	if (!(error instanceof Error)) {
+		return;
 	}
 
-	if (error instanceof InsufficientBalanceError || error instanceof SameAccountTransferError) {
-		return respond(HttpStatus.UnprocessableEntity, error.message);
-	}
-
-	if (error instanceof InvalidAmountError) {
-		return respond(HttpStatus.BadRequest, error.message);
-	}
-
-	if (error instanceof IdempotencyKeyReusedError || error instanceof OptimisticLockError) {
-		return respond(HttpStatus.Conflict, error.message);
+	for (const [ErrorClass, status] of ERROR_STATUS) {
+		if (error instanceof ErrorClass) {
+			return respond(status, error.message);
+		}
 	}
 }
