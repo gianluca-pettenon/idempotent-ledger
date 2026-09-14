@@ -1,5 +1,5 @@
 {
-  "name": "@banking-ledger/ledger",
+  "name": "@banking-ledger/idempotency",
   "private": true,
   "type": "module",
   "exports": {
@@ -10,9 +10,6 @@
   },
   "dependencies": {
     "@banking-ledger/db": "workspace:*",
-    "@banking-ledger/idempotency": "workspace:*",
-    "@banking-ledger/shared": "workspace:*",
-    "@banking-ledger/terms": "workspace:*",
     "drizzle-orm": "^0.44.5"
   }
 }

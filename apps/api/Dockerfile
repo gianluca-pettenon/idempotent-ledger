@@ -16,7 +16,10 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json ./
 COPY apps/api ./apps/api
 COPY --from=dependencies /app/apps/api/node_modules ./apps/api/node_modules
+COPY packages/db ./packages/db
+COPY packages/idempotency ./packages/idempotency
 COPY packages/ledger ./packages/ledger
+COPY packages/shared ./packages/shared
 COPY packages/terms ./packages/terms
 
 ENV NODE_ENV=production

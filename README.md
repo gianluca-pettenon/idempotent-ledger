@@ -1,136 +1,127 @@
 # Banking Ledger
 
-A monorepo for a banking ledger application: user accounts, balances, and transaction history backed by PostgreSQL.
+A double-entry ledger `API` built with `Bun`, `Elysia`, and `Postgres` — every deposit, withdrawal, and transfer is idempotent and safe under concurrency, without weakening either guarantee to make the other easier.
 
-## Tech stack
+## Flow
 
-| Layer | Technology |
-| --- | --- |
-| Runtime & package manager | [Bun](https://bun.sh) |
-| API | `Bun.serve()` with route handlers (TypeScript) |
-| Frontend | React 19, TypeScript, Vite 8 |
-| Linting & formatting | [Biome](https://biomejs.dev) |
-| Database | PostgreSQL 18 (Docker) |
-| Tooling | Bun workspaces, Docker / Docker Compose |
+**1. Idempotent write**
 
-## Project structure
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as API
+    participant P as Postgres
 
+    C->>A: POST /transfers (Idempotency-Key: K)
+    A->>P: BEGIN
+    A->>P: INSERT idempotency_keys (scope, K, hash) ON CONFLICT DO NOTHING
+    alt First time this key is seen
+        P-->>A: row reserved
+        A->>P: debit + credit both accounts (version check)
+        A->>P: UPDATE idempotency_keys SET response, completed_at
+        A->>P: COMMIT
+        A-->>C: 200 { outcome: "processed" }
+    else Key already exists
+        P-->>A: 0 rows (conflict)
+        A->>P: SELECT the existing record
+        alt same request payload
+            A-->>C: 200 { outcome: "duplicate" } (saved response, nothing re-applied)
+        else different payload, same key
+            A-->>C: 409 key reused with a different request
+        end
+    end
 ```
-banking-ledger/
-├── apps/
-│   ├── api/          # HTTP API (Bun.serve)
-│   └── web/          # React SPA (Vite dev server)
-├── packages/
-│   └── db/           # Shared database client & schema (planned)
-├── docker-compose.yml
-├── Dockerfile        # API container image
-└── .env              # Local environment (not committed)
+
+**2. Concurrent write to the same account**
+
+```mermaid
+sequenceDiagram
+    participant R1 as Request A
+    participant R2 as Request B
+    participant P as accounts row (version = 5)
+
+    R1->>P: read balance, version = 5
+    R2->>P: read balance, version = 5
+    R1->>P: UPDATE ... WHERE version = 5
+    P-->>R1: 1 row updated -> version = 6
+    R2->>P: UPDATE ... WHERE version = 5
+    P-->>R2: 0 rows, someone else already moved
+    Note over R2: retry from scratch (fresh read, new attempt)
+    R2->>P: read balance, version = 6
+    R2->>P: UPDATE ... WHERE version = 6
+    P-->>R2: 1 row updated -> version = 7
 ```
 
-### API routes (current)
+## Why this design
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/api/health` | Health check |
-| `GET` | `/api/users` | List users |
-| `GET` | `/api/accounts/:userId` | Accounts for a user |
-| `POST` | `/api/accounts/:userId/transactions` | Create a transaction |
+An `INSERT ... ON CONFLICT DO NOTHING` on a unique `(scope, key)` index is the only thing deciding who "wins" a race between duplicate requests — not application code. Reservation, business logic, and marking the key complete all happen inside one `db.transaction`, so a crash or a lock conflict midway rolls back the reservation too. A retried request never finds a half-finished key: either it doesn't exist yet, or it's fully committed with a saved response ready to replay.
 
-During development, the Vite dev server proxies `/api` to the API server.
+Balances use optimistic locking instead of `SELECT ... FOR UPDATE`: a `version` column and a compare-and-swap `UPDATE ... WHERE id = ? AND version = ?`. Zero rows updated means someone else moved first, and the whole operation — idempotency check included — retries from a fresh read. This holds under plain `READ COMMITTED`, needs no row locks held across round trips, and is exactly what the web app's "Concurrency lab" demonstrates live: fire four requests at once, watch one win and three retry cleanly.
+
+A transfer is the one operation touching two account rows at once, so it always updates them in the same fixed order (lower `id` first) no matter which account is sending and which is receiving. Two transfers moving money in opposite directions between the same two accounts would otherwise lock each other out — the same problem as two threads acquiring two mutexes in reverse order. Fixed ordering makes that deadlock structurally impossible instead of something to catch and retry.
+
+Deposits and withdrawals only touch one account and write one ledger entry — the other side of that movement is money entering or leaving the system from outside it, and there's no vault account here to hold that leg. A transfer moves money between two accounts that both exist in the ledger, so it always writes a matching debit and credit in the same transaction — inserted together, or not at all.
 
 ## Getting started
 
-### Prerequisites
+`Docker` and `Bun` 1.4+ are the only requirements.
 
-- [Bun](https://bun.sh) 1.4+
-- [Docker](https://www.docker.com/) (for PostgreSQL)
-
-### Setup
-
-1. Copy environment variables:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Set `POSTGRES_PASSWORD` in `.env`.
-
-3. Install dependencies:
-
-   ```bash
-   bun install
-   ```
-
-4. Start PostgreSQL:
-
-   ```bash
-   docker compose up postgres -d
-   ```
-
-5. Run API and web in parallel:
-
-   ```bash
-   bun run dev
-   ```
-
-   - Web: `http://localhost:3000` (from `PORT`)
-   - API: `http://localhost:3001` (from `API_PORT`)
-
-### Other commands
+**1. Configure**
 
 ```bash
-bun run dev:api     # API only (hot reload)
-bun run dev:web     # Web only (Vite HMR)
-bun run start       # API without hot reload
-bun run --filter '@banking-ledger/web' build
-bun run --filter '@banking-ledger/web' lint
-bun run --filter '@banking-ledger/web' format
+cp .env.example .env
 ```
 
-### Docker (API + Postgres)
+Set `POSTGRES_PASSWORD` — the `Postgres` container refuses to initialize without it.
+
+**2. Install and start Postgres**
 
 ```bash
-docker compose up --build
+bun install
+docker compose up postgres -d
 ```
 
-This starts:
+**3. Create the schema and seed data**
 
-- PostgreSQL on `POSTGRES_PORT`
-- API on `API_PORT`
+```bash
+bun run db:migrate
+```
 
-## Conventions
+Creates every table and seeds `User A`–`User D`, each with a $0 balance. This comes before anything else — on an empty database every route fails with `relation "users" does not exist`.
 
-### Do
+**4. Start the stack**
 
-- Use **Bun** for installs, scripts, and running TypeScript (`bun install`, `bun run`, `bun test`).
-- Keep shared packages under `packages/` and apps under `apps/`.
-- Put environment variables in the root `.env`; both API and web read from there.
-- Use `Bun.serve()` route handlers for API endpoints.
-- Use `Bun.sql` (or the shared `packages/db` client) for PostgreSQL — not `pg` or `postgres.js`.
-- Write API handlers in `apps/api/`; put reusable DB logic in `packages/db`.
-- Use React 19 patterns (the React Compiler is enabled in the web app).
-- Keep TypeScript strict; match existing module style (`type: "module`, `verbatimModuleSyntax`).
+```bash
+bun run dev
+```
 
-### Do not
+Web on `localhost:3000`, API on `localhost:3001`. Open the web app, pick a user, and run the "Concurrency lab": fire deposits with the same idempotency key and watch three of four collapse into `duplicate`; drop the key and watch all four apply for real.
 
-- Use **npm**, **pnpm**, or **yarn** — this repo is Bun-only.
-- Add **Express**, **Fastify**, or similar HTTP frameworks; the API is `Bun.serve()`.
-- Commit `.env` or secrets; use `.env.example` for documentation only.
-- Run the web app with Node; use `bun run dev:web` or Vite via Bun.
-- Put business logic in route stubs without going through proper validation and persistence layers.
-- Bypass the `/api` prefix for backend routes (the frontend proxy expects it).
+## Commands
 
-## Environment variables
+```bash
+bun run dev          # API + web, both with hot reload
+bun test             # full suite, including integration tests against the Postgres above
+bun run db:migrate   # apply pending migrations
+bun run db:generate  # scaffold a new migration from schema.ts changes
+bun run db:studio    # browse the database
+```
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `POSTGRES_USER` | `postgres` | Database user |
-| `POSTGRES_PASSWORD` | — | Database password (required) |
-| `POSTGRES_DB` | `banking-ledger` | Database name |
-| `POSTGRES_PORT` | `5432` | Database port |
-| `PORT` | `3000` | Web dev server port |
-| `API_PORT` | `3001` | API server port |
+## After changing dependencies
 
-## Status
+```bash
+docker compose build api web
+docker compose up -d
+```
 
-Early setup: API routes are stubs, `packages/db` is not wired up yet, and persistence is not implemented. PostgreSQL is configured in Docker Compose and ready for schema and migrations.
+The API and web Docker images copy each `packages/*` folder by name into their final build stage. A new workspace dependency needs a rebuild either way — hot reload inside a running container never reaches a stale image.
+
+## Starting over
+
+```bash
+docker compose down -v
+docker compose up postgres -d
+bun run db:migrate
+```
+
+`down -v` drops the Postgres volume along with every balance and transaction created while testing; `db:migrate` brings back the schema and the four zero-balance users.

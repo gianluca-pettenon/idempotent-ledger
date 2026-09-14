@@ -1,4 +1,5 @@
 export { client, db } from "./client";
+export type { DbClient } from "./client";
 export {
   accounts,
   entries,

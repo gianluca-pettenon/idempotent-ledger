@@ -3,7 +3,9 @@
 	"private": true,
 	"type": "module",
 	"dependencies": {
+		"@banking-ledger/idempotency": "workspace:*",
 		"@banking-ledger/ledger": "workspace:*",
+		"@banking-ledger/shared": "workspace:*",
 		"@elysia/openapi": "^1.4.16",
 		"elysia": "^1.4.30"
 	},

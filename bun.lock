@@ -7,13 +7,16 @@
       "devDependencies": {
         "@types/bun": "latest",
         "drizzle-kit": "^0.31.4",
+        "postgres": "^3.4.5",
         "typescript": "^5.9.3",
       },
     },
     "apps/api": {
       "name": "@banking-ledger/api",
       "dependencies": {
+        "@banking-ledger/idempotency": "workspace:*",
         "@banking-ledger/ledger": "workspace:*",
+        "@banking-ledger/shared": "workspace:*",
         "@elysia/openapi": "^1.4.16",
         "elysia": "^1.4.30",
       },
@@ -43,7 +46,6 @@
       },
       "optionalDependencies": {
         "@rolldown/binding-linux-arm64-gnu": "1.2.6",
-        "@rolldown/binding-linux-x64-gnu": "1.2.6",
       },
     },
     "packages/db": {
@@ -52,10 +54,21 @@
         "drizzle-orm": "^0.44.5",
       },
     },
+    "packages/idempotency": {
+      "name": "@banking-ledger/idempotency",
+      "dependencies": {
+        "@banking-ledger/db": "workspace:*",
+        "drizzle-orm": "^0.44.5",
+      },
+    },
     "packages/ledger": {
       "name": "@banking-ledger/ledger",
       "dependencies": {
+        "@banking-ledger/db": "workspace:*",
+        "@banking-ledger/idempotency": "workspace:*",
+        "@banking-ledger/shared": "workspace:*",
         "@banking-ledger/terms": "workspace:*",
+        "drizzle-orm": "^0.44.5",
       },
     },
     "packages/shared": {
@@ -101,6 +114,8 @@
     "@banking-ledger/api": ["@banking-ledger/api@workspace:apps/api"],
 
     "@banking-ledger/db": ["@banking-ledger/db@workspace:packages/db"],
+
+    "@banking-ledger/idempotency": ["@banking-ledger/idempotency@workspace:packages/idempotency"],
 
     "@banking-ledger/ledger": ["@banking-ledger/ledger@workspace:packages/ledger"],
 
@@ -395,6 +410,8 @@
     "picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
 
     "postcss": ["postcss@8.5.26", "", { "dependencies": { "nanoid": "^3.3.17", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ=="],
+
+    "postgres": ["postgres@3.4.9", "", {}, "sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw=="],
 
     "react": ["react@19.2.8", "", {}, "sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw=="],
 
