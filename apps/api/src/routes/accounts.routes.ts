@@ -1,7 +1,7 @@
-import { deposit, getAccountSnapshot, withdraw } from "@banking-ledger/ledger";
 import { TransactionKind } from "@banking-ledger/shared";
 import { Elysia, t } from "elysia";
-import { readRequestMeta } from "../request-meta";
+import { deposit, getAccountSnapshot, withdraw } from "@api/features/ledger";
+import { readRequestMeta } from "@api/request-meta";
 
 const transactionBodySchema = t.Object({
 	type: t.Union([t.Literal(TransactionKind.Deposit), t.Literal(TransactionKind.Withdraw)]),

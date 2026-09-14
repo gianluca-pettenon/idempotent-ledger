@@ -45,9 +45,6 @@ export class LedgerRepository {
 		return this.client.insert(entriesTable).values(newEntries).returning();
 	}
 
-	// Uma linha por entry da conta, já trazendo o tipo/valor da transação e o nome do
-	// usuário do outro lado (quando for transfer) — o service só traduz isso pro formato
-	// que o front espera (deposit/withdraw/transfer_in/transfer_out).
 	async findRecentByAccountId(accountId: string, limit: number) {
 		return this.client
 			.select({

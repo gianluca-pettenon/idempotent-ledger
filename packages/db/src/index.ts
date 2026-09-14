@@ -1,5 +1,5 @@
-export { client, db } from "./client";
-export type { DbClient } from "./client";
+export { client, db } from "@db/client";
+export type { DbClient } from "@db/client";
 export {
   accounts,
   entries,
@@ -8,4 +8,4 @@ export {
   transactions,
   transactionType,
   users,
-} from "./schema";
+} from "@db/schema";

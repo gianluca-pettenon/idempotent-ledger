@@ -2,8 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { accounts, db, entries, transactions, users } from "@banking-ledger/db";
 import { CONCURRENCY_DEMO } from "@banking-ledger/shared";
 import { eq } from "drizzle-orm";
-import { AccountNotFoundError, InsufficientBalanceError, InvalidAmountError, SameAccountTransferError } from "./errors";
-import { deposit, getAccountSnapshot, transfer, withdraw } from "./ledger.service";
+import {
+	AccountNotFoundError,
+	InsufficientBalanceError,
+	InvalidAmountError,
+	SameAccountTransferError,
+} from "../../../../features/ledger/errors/ledger.errors";
+import { deposit, getAccountSnapshot, transfer, withdraw } from "../../../../features/ledger/services/ledger.service";
 
 async function createAccount(initialBalance: number) {
 	const [user] = await db.insert(users).values({ name: "Test User" }).returning();

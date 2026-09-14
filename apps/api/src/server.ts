@@ -1,10 +1,10 @@
 import { openapi } from "@elysia/openapi";
 import { Elysia } from "elysia";
-import { mapDomainErrors } from "./errors";
-import { accountsRoutes } from "./routes/accounts.routes";
-import { healthRoutes } from "./routes/health.routes";
-import { transfersRoutes } from "./routes/transfers.routes";
-import { usersRoutes } from "./routes/users.routes";
+import { mapDomainErrors } from "@api/errors";
+import { accountsRoutes } from "@api/routes/accounts.routes";
+import { healthRoutes } from "@api/routes/health.routes";
+import { transfersRoutes } from "@api/routes/transfers.routes";
+import { usersRoutes } from "@api/routes/users.routes";
 
 const port = Number(Bun.env.API_PORT);
 

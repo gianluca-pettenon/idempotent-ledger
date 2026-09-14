@@ -1,6 +1,6 @@
 import { db, type DbClient } from "@banking-ledger/db";
-import { IdempotencyKeyReusedError, IdempotencyRecordNotCompletedError } from "./errors";
-import { IdempotencyRepository } from "./repositories/idempotency.repository";
+import { IdempotencyKeyReusedError, IdempotencyRecordNotCompletedError } from "@api/features/idempotency/errors/idempotency.errors";
+import { IdempotencyRepository } from "@api/features/idempotency/repositories/idempotency.repository";
 
 export type IdempotencyOutcome = "processed" | "duplicate";
 
@@ -21,9 +21,6 @@ export async function withIdempotency<T>(
 	client: DbClient = db,
 ): Promise<IdempotencyResult<T>> {
 	if (!key) {
-		// Sem idempotência, mas a atomicidade continua obrigatória: a operação de negócio pode
-		// tocar mais de uma conta (ex. transfer), então ainda precisa rodar dentro de uma
-		// db.transaction — só a reserva/dedup da chave é que fica de fora.
 		return client.transaction(async (tx) => ({ result: await operation(tx), outcome: "processed" as const }));
 	}
 
@@ -44,9 +41,6 @@ export async function withIdempotency<T>(
 			return { result, outcome: "processed" };
 		}
 
-		// Não reservou: já existe uma chave com esse (scope, key). Como reserva + operação +
-		// conclusão sempre commitam juntas (mesma transação), a essa altura a linha do
-		// concorrente vencedor já está commitada e completa — não existe estado "no meio".
 		const existing = await idempotencyRepository.findByScopeAndKey(scope, key);
 
 		if (!existing) {

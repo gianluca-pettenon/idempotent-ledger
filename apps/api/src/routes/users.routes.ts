@@ -1,5 +1,5 @@
-import { listUsers } from "@banking-ledger/ledger";
 import { Elysia } from "elysia";
+import { listUsers } from "@api/features/ledger";
 
 export const usersRoutes = new Elysia().get(
 	"/users",

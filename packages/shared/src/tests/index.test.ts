@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import * as shared from './index.ts';
+import * as shared from '@shared/index.ts';
 
 describe('package exports', () => {
   test('re-exports banking and locale symbols', () => {

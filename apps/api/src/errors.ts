@@ -4,8 +4,8 @@ import {
 	InvalidAmountError,
 	OptimisticLockError,
 	SameAccountTransferError,
-} from "@banking-ledger/ledger";
-import { IdempotencyKeyReusedError } from "@banking-ledger/idempotency";
+} from "@api/features/ledger";
+import { IdempotencyKeyReusedError } from "@api/features/idempotency";
 
 const HttpStatus = {
 	BadRequest: 400,
@@ -35,9 +35,6 @@ export function mapDomainErrors({ error }: { error: unknown }) {
 		return respond(HttpStatus.Conflict, error.message);
 	}
 
-	// Não deveria acontecer em uso normal: o retry otimista (packages/ledger) já resolve
-	// conflitos de versão internamente. Se ainda assim vazar, é contenção esgotando as
-	// tentativas — 409 é mais honesto que deixar cair no 500 genérico.
 	if (error instanceof OptimisticLockError) {
 		return respond(HttpStatus.Conflict, error.message);
 	}

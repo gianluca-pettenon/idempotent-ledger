@@ -1,2 +1,2 @@
-export * from './banking.ts';
-export * from './locale.ts';
+export * from '@shared/banking.ts';
+export * from '@shared/locale.ts';

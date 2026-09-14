@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AMOUNT_PLACEHOLDER, CURRENCY, DISPLAY_LOCALE } from './locale.ts';
+import { AMOUNT_PLACEHOLDER, CURRENCY, DISPLAY_LOCALE } from '@shared/locale.ts';
 
 describe('locale constants', () => {
   test('uses en-US display locale and USD currency', () => {

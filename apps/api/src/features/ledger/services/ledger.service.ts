@@ -1,16 +1,16 @@
 import { db, type DbClient } from "@banking-ledger/db";
-import { withIdempotency } from "@banking-ledger/idempotency";
 import { OperationKind } from "@banking-ledger/shared";
+import { withIdempotency } from "@api/features/idempotency";
 import {
 	AccountNotFoundError,
 	InsufficientBalanceError,
 	InvalidAmountError,
 	OptimisticLockError,
 	SameAccountTransferError,
-} from "./errors";
-import { AccountsRepository } from "./repositories/accounts.repository";
-import { LedgerRepository } from "./repositories/ledger.repository";
-import { UsersRepository } from "./repositories/users.repository";
+} from "@api/features/ledger/errors/ledger.errors";
+import { AccountsRepository } from "@api/features/ledger/repositories/accounts.repository";
+import { LedgerRepository } from "@api/features/ledger/repositories/ledger.repository";
+import { UsersRepository } from "@api/features/ledger/repositories/users.repository";
 
 const MAX_LOCK_RETRIES = 5;
 const RECENT_TRANSACTIONS_LIMIT = 20;
@@ -21,8 +21,6 @@ export async function listUsers(client: DbClient = db) {
 
 type RecentEntryRow = Awaited<ReturnType<LedgerRepository["findRecentByAccountId"]>>[number];
 
-// O front (apps/web/src/app/types.ts) enxerga transfer pelo lado de quem está olhando:
-// "transfer_in" pra quem recebeu, "transfer_out" pra quem enviou — nunca "transfer" cru.
 function toTransactionView(row: RecentEntryRow, accountId: string) {
 	if (row.transactionType !== "transfer") {
 		return {
@@ -63,10 +61,6 @@ export async function getAccountSnapshot(userId: string, client: DbClient = db) 
 	};
 }
 
-// Reexecuta a operação inteira (idempotência incluída) quando ela falha por conflito de
-// versão. Como reserva + operação de negócio + conclusão da idempotency key acontecem na
-// mesma db.transaction, um OptimisticLockError dá rollback em tudo — a tentativa seguinte
-// parte limpa, sem nenhuma chave "presa" reservada sem efeito aplicado.
 async function withOptimisticLockRetry<T>(operation: () => Promise<T>): Promise<T> {
 	let attempt = 0;
 
@@ -83,9 +77,6 @@ async function withOptimisticLockRetry<T>(operation: () => Promise<T>): Promise<
 	}
 }
 
-// userId, não accountId: é assim que a rota (/accounts/:userId/transactions) e o
-// frontend (lib/api.ts) identificam a conta — a resolução userId -> account acontece
-// aqui dentro, via AccountsRepository.findByUserId.
 type DepositOrWithdrawParams = {
 	userId: string;
 	amount: number;
@@ -95,10 +86,6 @@ type DepositOrWithdrawParams = {
 
 type MovementKind = "deposit" | "withdraw";
 
-// Deposit/withdraw só têm uma conta real envolvida (a outra ponta é "o mundo de fora",
-// que este schema não modela como conta) — por isso geram só 1 entry, espelhando
-// fromAccountId/toAccountId nullable de `transactions`. Transfer (fase 5) é quem gera
-// o par débito+crédito de verdade, entre duas contas.
 async function applyMovement(tx: DbClient, params: DepositOrWithdrawParams, kind: MovementKind) {
 	const direction = kind === "deposit" ? 1 : -1;
 	const accountsRepository = new AccountsRepository(tx);
@@ -146,8 +133,6 @@ async function applyMovement(tx: DbClient, params: DepositOrWithdrawParams, kind
 	return updatedAccounts[0];
 }
 
-// Retorno espelha IdempotencyResult<Account>: a rota usa `outcome` direto em `meta.outcome`
-// (é o que o "Concurrency lab" do frontend lê pra colorir processed/duplicate/failed).
 export async function deposit(params: DepositOrWithdrawParams, client: DbClient = db) {
 	if (params.amount <= 0) {
 		throw new InvalidAmountError("Amount must be greater than zero");
@@ -157,9 +142,6 @@ export async function deposit(params: DepositOrWithdrawParams, client: DbClient 
 		withIdempotency(
 			OperationKind.Deposit,
 			params.idempotencyKey,
-			// Hash só dos campos de negócio: requestId muda a cada tentativa física por
-			// natureza (X-Request-Id é por requisição HTTP), não pode entrar no hash —
-			// senão duas tentativas legítimas da mesma operação pareceriam payloads diferentes.
 			{ userId: params.userId, amount: params.amount },
 			(tx) => applyMovement(tx, params, "deposit"),
 			client,
@@ -183,8 +165,6 @@ export async function withdraw(params: DepositOrWithdrawParams, client: DbClient
 	);
 }
 
-// fromUserId/toUserId: o body de POST /transfers manda { fromUserId, toUserId, amount },
-// nunca accountId — mesma resolução via AccountsRepository.findByUserId dos dois lados.
 type TransferParams = {
 	fromUserId: string;
 	toUserId: string;
@@ -216,9 +196,6 @@ async function applyTransfer(tx: DbClient, params: TransferParams) {
 
 	const newToBalance = toAccount.balance + params.amount;
 
-	// Sempre atualiza as duas contas na mesma ordem (por id), nunca "from então to" —
-	// senão duas transferências concorrentes em sentidos opostos entre as mesmas duas
-	// contas travariam uma na outra (deadlock real do Postgres, não um conflito de versão).
 	const [firstAccount, firstBalance, secondAccount, secondBalance] =
 		fromAccount.id < toAccount.id
 			? [fromAccount, newFromBalance, toAccount, newToBalance]
@@ -256,14 +233,11 @@ async function applyTransfer(tx: DbClient, params: TransferParams) {
 		toAccountId: toAccount.id,
 	});
 
-	// As 2 entries sempre juntas, na mesma chamada — nunca um débito sem o crédito correspondente.
 	await ledgerRepository.insertEntries([
 		{ transactionId: transaction.id, accountId: fromAccount.id, type: "debit", amount: params.amount },
 		{ transactionId: transaction.id, accountId: toAccount.id, type: "credit", amount: params.amount },
 	]);
 
-	// Devolve a conta de origem, pra manter o mesmo contrato de deposit/withdraw
-	// (o front sempre olha a conta do usuário que iniciou a operação).
 	return updatedFromAccount;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { CONCURRENCY_DEMO, OperationKind, OPERATION_KINDS, TransactionKind } from './banking.ts';
+import { CONCURRENCY_DEMO, OperationKind, OPERATION_KINDS, TransactionKind } from '@shared/banking.ts';
 
 describe('OperationKind', () => {
   test('defines deposit, withdraw, and transfer literals', () => {

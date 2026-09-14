@@ -1,6 +1,6 @@
-import { transfer } from "@banking-ledger/ledger";
 import { Elysia, t } from "elysia";
-import { readRequestMeta } from "../request-meta";
+import { transfer } from "@api/features/ledger";
+import { readRequestMeta } from "@api/request-meta";
 
 const transferBodySchema = t.Object({
 	fromUserId: t.String(),
