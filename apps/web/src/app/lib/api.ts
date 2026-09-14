@@ -93,9 +93,7 @@ async function runRequest(
     });
 
     outcome = response.meta?.outcome ?? 'processed';
-  } catch {
-    // Keep failed as the fallback outcome for any request error.
-  }
+  } catch {}
 
   return {
     label,

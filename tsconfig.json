@@ -11,6 +11,12 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@api/*": ["./apps/api/src/*"],
+      "@db/*": ["./packages/db/src/*"],
+      "@shared/*": ["./packages/shared/src/*"]
+    }
   }
 }

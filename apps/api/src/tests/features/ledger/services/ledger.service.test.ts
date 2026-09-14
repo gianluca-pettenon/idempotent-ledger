@@ -7,8 +7,8 @@ import {
 	InsufficientBalanceError,
 	InvalidAmountError,
 	SameAccountTransferError,
-} from "../../../../features/ledger/errors/ledger.errors";
-import { deposit, getAccountSnapshot, transfer, withdraw } from "../../../../features/ledger/services/ledger.service";
+} from "@api/features/ledger/errors/ledger.errors";
+import { deposit, getAccountSnapshot, transfer, withdraw } from "@api/features/ledger/services/ledger.service";
 
 async function createAccount(initialBalance: number) {
 	const [user] = await db.insert(users).values({ name: "Test User" }).returning();
@@ -56,10 +56,6 @@ async function withTwoAccounts(
 			accountIdB: accountB.accountId,
 		});
 	} finally {
-		// Um transfer cria 1 transaction com 2 entries (débito na A, crédito na B) — apagar
-		// só a conta A já tentaria excluir essa transaction antes do entry da B ser removido,
-		// violando a FK. Por isso: TODOS os entries primeiro, depois TODAS as transactions,
-		// só então as contas.
 		await db.delete(entries).where(eq(entries.accountId, accountA.accountId));
 		await db.delete(entries).where(eq(entries.accountId, accountB.accountId));
 		await db.delete(transactions).where(eq(transactions.fromAccountId, accountA.accountId));
@@ -121,9 +117,6 @@ describe("deposit", () => {
 		});
 	});
 
-	// Prova o mesmo cenário do "Concurrency lab" do front (4 requisições em paralelo, sem
-	// idempotency key): cada uma é processada de verdade, e o lock otimista com retry
-	// garante que nenhum incremento se perde por causa de "lost update".
 	test("keeps the balance correct under N concurrent deposits without an idempotency key", async () => {
 		await withAccount(0, async ({ userId, accountId }) => {
 			const results = await Promise.all(
@@ -142,8 +135,6 @@ describe("deposit", () => {
 		});
 	});
 
-	// Mesmo cenário, mas com a mesma idempotency key reaproveitada nas N requisições:
-	// deve colapsar em 1 aplicação só, igual ao botão "With Idempotency" do front.
 	test("collapses N concurrent deposits with the same idempotency key into a single credit", async () => {
 		await withAccount(0, async ({ userId, accountId }) => {
 			const idempotencyKey = crypto.randomUUID();
@@ -289,10 +280,6 @@ describe("transfer", () => {
 		});
 	});
 
-	// Prova a proteção contra deadlock: duas transferências concorrentes em sentidos
-	// opostos entre as MESMAS duas contas (A->B e B->A). Como as duas sempre travam as
-	// contas na mesma ordem (por id), nenhuma delas trava esperando a outra — só disputam
-	// versão normalmente, e o retry otimista resolve. Os saldos finais devem bater.
 	test("does not deadlock on concurrent transfers in opposite directions between the same two accounts", async () => {
 		await withTwoAccounts(1000, 1000, async ({ userIdA, accountIdA, userIdB, accountIdB }) => {
 			const [aToB, bToA] = await Promise.all([
@@ -306,7 +293,6 @@ describe("transfer", () => {
 			const [accountA] = await db.select().from(accounts).where(eq(accounts.id, accountIdA));
 			const [accountB] = await db.select().from(accounts).where(eq(accounts.id, accountIdB));
 
-			// A: -300 (enviou) +100 (recebeu) = 800 | B: +300 (recebeu) -100 (enviou) = 1200
 			expect(accountA.balance).toBe(800);
 			expect(accountB.balance).toBe(1200);
 		});
