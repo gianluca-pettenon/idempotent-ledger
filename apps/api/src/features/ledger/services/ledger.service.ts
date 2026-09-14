@@ -7,7 +7,7 @@ import {
 	InvalidAmountError,
 	OptimisticLockError,
 	SameAccountTransferError,
-} from "@api/features/ledger/errors/ledger.errors";
+} from "@api/features/ledger/errors";
 import { AccountsRepository } from "@api/features/ledger/repositories/accounts.repository";
 import { LedgerRepository } from "@api/features/ledger/repositories/ledger.repository";
 import { UsersRepository } from "@api/features/ledger/repositories/users.repository";

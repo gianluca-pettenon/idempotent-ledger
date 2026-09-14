@@ -1,5 +1,5 @@
 import { db, type DbClient } from "@banking-ledger/db";
-import { IdempotencyKeyReusedError, IdempotencyRecordNotCompletedError } from "@api/features/idempotency/errors/idempotency.errors";
+import { IdempotencyKeyReusedError, IdempotencyRecordNotCompletedError } from "@api/features/idempotency/errors";
 import { IdempotencyRepository } from "@api/features/idempotency/repositories/idempotency.repository";
 
 export type IdempotencyOutcome = "processed" | "duplicate";

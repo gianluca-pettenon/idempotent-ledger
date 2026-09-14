@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { db, idempotencyKeys } from "@banking-ledger/db";
 import { eq } from "drizzle-orm";
-import { IdempotencyKeyReusedError } from "@api/features/idempotency/errors/idempotency.errors";
+import { IdempotencyKeyReusedError } from "@api/features/idempotency/errors";
 import { withIdempotency } from "@api/features/idempotency/services/idempotency.service";
 
 const TEST_SCOPE = "test.idempotency";

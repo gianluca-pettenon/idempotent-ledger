@@ -7,7 +7,7 @@ import {
 	InsufficientBalanceError,
 	InvalidAmountError,
 	SameAccountTransferError,
-} from "@api/features/ledger/errors/ledger.errors";
+} from "@api/features/ledger/errors";
 import { deposit, getAccountSnapshot, transfer, withdraw } from "@api/features/ledger/services/ledger.service";
 
 async function createAccount(initialBalance: number) {

@@ -25,4 +25,5 @@ export type RunEntry = {
   label: string;
   outcome: string;
   ms: number;
+  detail?: string;
 };

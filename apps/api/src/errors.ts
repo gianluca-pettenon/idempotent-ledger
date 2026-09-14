@@ -31,11 +31,7 @@ export function mapDomainErrors({ error }: { error: unknown }) {
 		return respond(HttpStatus.BadRequest, error.message);
 	}
 
-	if (error instanceof IdempotencyKeyReusedError) {
-		return respond(HttpStatus.Conflict, error.message);
-	}
-
-	if (error instanceof OptimisticLockError) {
+	if (error instanceof IdempotencyKeyReusedError || error instanceof OptimisticLockError) {
 		return respond(HttpStatus.Conflict, error.message);
 	}
 }

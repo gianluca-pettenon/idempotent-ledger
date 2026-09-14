@@ -7,10 +7,7 @@ type RequestOptions = RequestInit & {
 };
 
 type AccountResponse = {
-  account?: Account;
-  balance?: number;
-  transactions?: Account['transactions'];
-  userId?: string;
+  account: Account;
 };
 
 type MetaResponse = {
@@ -51,7 +48,8 @@ async function request<T>(path: string, options: RequestOptions = {}) {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    const body: { message?: string } | null = await response.json().catch(() => null);
+    throw new Error(`${response.status} ${body?.message ?? response.statusText}`);
   }
 
   return response.json() as Promise<T>;
@@ -80,6 +78,7 @@ async function runRequest(
           amount: params.amount,
         };
   let outcome = 'failed';
+  let detail: string | undefined;
 
   try {
     const response = await request<TransactionResponse>(path, {
@@ -93,12 +92,15 @@ async function runRequest(
     });
 
     outcome = response.meta?.outcome ?? 'processed';
-  } catch {}
+  } catch (error) {
+    detail = error instanceof Error ? error.message : undefined;
+  }
 
   return {
     label,
     outcome,
     ms: Math.round(performance.now() - startedAt),
+    detail,
   };
 }
 
@@ -107,18 +109,9 @@ export async function fetchUsers() {
 }
 
 export async function fetchAccount(userId: string) {
-  const response = await request<AccountResponse>(`/accounts/${userId}`);
+  const { account } = await request<AccountResponse>(`/accounts/${userId}`);
 
-  if (response.account) {
-    return { account: response.account };
-  }
-
-  return {
-    account: {
-      balance: response.balance ?? 0,
-      transactions: response.transactions ?? [],
-    } satisfies Account,
-  };
+  return { account };
 }
 
 export async function runConcurrentRequests(params: RunRequestParams) {

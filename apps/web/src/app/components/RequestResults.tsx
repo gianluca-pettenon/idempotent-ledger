@@ -36,7 +36,7 @@ export function RequestResults({ entries }: RequestResultsProps) {
         {entries.map((entry) => (
           <li
             key={entry.label}
-            className="flex flex-col gap-2 rounded-2xl border border-border/60 bg-surface/70 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-2 rounded-2xl border border-border/60 bg-surface/70 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
           >
             <div className="flex items-center gap-2 text-foreground">
               <span>{entry.label}</span>
@@ -51,6 +51,9 @@ export function RequestResults({ entries }: RequestResultsProps) {
               </span>
             </div>
             <span>{entry.ms}ms</span>
+            {entry.detail ? (
+              <span className="w-full text-[11px] text-muted-foreground">{entry.detail}</span>
+            ) : null}
           </li>
         ))}
       </ul>
