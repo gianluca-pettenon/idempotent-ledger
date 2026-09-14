@@ -1,6 +1,6 @@
 import { ACCOUNT, STATEMENT } from '@banking-ledger/terms';
 
-import type { Transaction } from '@/app/types';
+import type { Transaction } from '@/app/lib/types';
 import { formatDate, formatUsd } from '@/shared/lib/format';
 
 type BalanceCardProps = {

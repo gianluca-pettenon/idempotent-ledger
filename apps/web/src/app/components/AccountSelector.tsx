@@ -1,6 +1,6 @@
 import { ACCOUNT, CONCURRENCY } from '@banking-ledger/terms';
 
-import type { User } from '@/app/types';
+import type { User } from '@/app/lib/types';
 import { Select } from '@/shared/ui';
 
 type AccountSelectorProps = {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { fetchAccount } from '@/app/lib/api';
-import type { Transaction } from '@/app/types';
+import type { Transaction } from '@/app/lib/types';
 
 type AccountState = {
   balance: number | null;
@@ -22,10 +22,7 @@ async function fetchAccountData(userId: string) {
 }
 
 export function useAccountBalance(userId: string) {
-  const [account, setAccount] = useState<AccountState>({
-    balance: null,
-    transactions: [],
-  });
+  const [account, setAccount] = useState<AccountState>({ balance: null, transactions: [] });
 
   async function refresh() {
     setAccount(await fetchAccountData(userId));

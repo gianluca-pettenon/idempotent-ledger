@@ -7,7 +7,7 @@ import { OperationForm } from '@/app/components/OperationForm';
 import { useAccountBalance } from '@/app/hooks/useAccountBalance';
 import { useUsers } from '@/app/hooks/useUsers';
 import { runConcurrentRequests } from '@/app/lib/api';
-import type { Operation, RunEntry } from '@/app/types';
+import type { Operation, RunEntry } from '@/app/lib/types';
 
 export function App() {
   const { users, userId, setUserId } = useUsers();
@@ -67,7 +67,7 @@ export function App() {
               onAmountChange={setAmount}
               onToUserIdChange={setToUserId}
               onRun={handleRun}
-            />
+            ></OperationForm>
 
             <BalanceCard balance={balance} transactions={transactions} />
           </div>

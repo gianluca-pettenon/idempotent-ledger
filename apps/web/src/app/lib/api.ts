@@ -1,6 +1,6 @@
 import { CONCURRENCY_DEMO, OperationKind } from '@banking-ledger/shared';
 
-import type { Account, Operation, RunEntry, User } from '@/app/types';
+import type { Account, Operation, RunEntry, User } from '@/app/lib/types';
 
 type RequestOptions = RequestInit & {
   headers?: HeadersInit;
@@ -75,6 +75,7 @@ async function request<T>(path: string, options: RequestOptions = {}) {
     const body: { message?: string } | null = await response
       .json()
       .catch(() => null);
+
     throw new Error(
       `${response.status} ${body?.message ?? response.statusText}`,
     );

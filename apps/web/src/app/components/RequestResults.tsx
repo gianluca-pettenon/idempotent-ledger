@@ -1,6 +1,6 @@
 import { CONCURRENCY } from '@banking-ledger/terms';
 
-import type { RunEntry } from '@/app/types';
+import type { RunEntry } from '@/app/lib/types';
 
 type RequestResultsProps = {
   entries: RunEntry[];
@@ -11,7 +11,8 @@ const OUTCOME_CLASSNAME: Record<string, string> = {
   duplicate: 'border-info/30 bg-info/10 text-info',
 };
 
-const FAILED_OUTCOME_CLASSNAME = 'border-destructive/30 bg-destructive/10 text-destructive-foreground';
+const FAILED_OUTCOME_CLASSNAME =
+  'border-destructive/30 bg-destructive/10 text-destructive-foreground';
 
 function getOutcomeClassName(outcome: string) {
   return OUTCOME_CLASSNAME[outcome] ?? FAILED_OUTCOME_CLASSNAME;
@@ -51,7 +52,9 @@ export function RequestResults({ entries }: RequestResultsProps) {
             </div>
             <span>{entry.ms}ms</span>
             {entry.detail ? (
-              <span className="w-full text-[11px] text-muted-foreground">{entry.detail}</span>
+              <span className="w-full text-[11px] text-muted-foreground">
+                {entry.detail}
+              </span>
             ) : null}
           </li>
         ))}

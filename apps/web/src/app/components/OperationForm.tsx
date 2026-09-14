@@ -1,7 +1,7 @@
 import { OPERATION_KINDS, OperationKind } from '@banking-ledger/shared';
 import { CONCURRENCY, FORM, OPERATION } from '@banking-ledger/terms';
 import { RequestResults } from '@/app/components/RequestResults';
-import type { Operation, RunEntry, User } from '@/app/types';
+import type { Operation, RunEntry, User } from '@/app/lib/types';
 import { Button, type ButtonVariant, Select } from '@/shared/ui';
 
 type OperationFormProps = {
@@ -35,9 +35,9 @@ export function OperationForm({
   onToUserIdChange,
   onRun,
 }: OperationFormProps) {
-  const recipientOptions = recipients.map((user) => ({
-    value: user.id,
-    label: user.name,
+  const recipientOptions = recipients.map(({ id, name }) => ({
+    value: id,
+    label: name,
   }));
 
   return (
