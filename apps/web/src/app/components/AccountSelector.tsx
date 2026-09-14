@@ -20,9 +20,9 @@ export function AccountSelector({
     <header className="sticky top-0 z-20 border-b border-border/60 bg-background/70 backdrop-blur-xl">
       <div className="container flex min-h-[var(--height-topbar)] flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
-          <p className="eyebrow">{CONCURRENCY.DRAWER.TITLE}</p>
+          <p className="eyebrow">{CONCURRENCY.HEADER.TITLE}</p>
           <p className="text-sm text-muted-foreground">
-            {CONCURRENCY.DRAWER.DESCRIPTION}
+            {CONCURRENCY.HEADER.DESCRIPTION}
           </p>
         </div>
 

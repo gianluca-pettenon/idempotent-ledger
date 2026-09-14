@@ -1,10 +1,8 @@
 import { OPERATION_KINDS, OperationKind } from '@banking-ledger/shared';
 import { CONCURRENCY, FORM, OPERATION } from '@banking-ledger/terms';
-
+import { RequestResults } from '@/app/components/RequestResults';
 import type { Operation, RunEntry, User } from '@/app/types';
 import { Button, type ButtonVariant, Select } from '@/shared/ui';
-
-import { RequestResults } from '@/app/components/RequestResults';
 
 type OperationFormProps = {
   operation: Operation;

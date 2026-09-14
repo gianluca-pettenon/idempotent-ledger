@@ -28,7 +28,10 @@ type RunRequestParams = {
 
 type MovementRequestParams = Omit<RunRequestParams, 'withIdempotencyKey'>;
 
-const REQUEST_BUILDER: Record<Operation, (params: MovementRequestParams) => { path: string; body: unknown }> = {
+const REQUEST_BUILDER: Record<
+  Operation,
+  (params: MovementRequestParams) => { path: string; body: unknown }
+> = {
   [OperationKind.Deposit]: (params) => ({
     path: `/accounts/${params.userId}/transactions`,
     body: { type: OperationKind.Deposit, amount: params.amount },
@@ -39,7 +42,11 @@ const REQUEST_BUILDER: Record<Operation, (params: MovementRequestParams) => { pa
   }),
   [OperationKind.Transfer]: (params) => ({
     path: '/transfers',
-    body: { fromUserId: params.userId, toUserId: params.toUserId, amount: params.amount },
+    body: {
+      fromUserId: params.userId,
+      toUserId: params.toUserId,
+      amount: params.amount,
+    },
   }),
 };
 
@@ -65,8 +72,12 @@ async function request<T>(path: string, options: RequestOptions = {}) {
   });
 
   if (!response.ok) {
-    const body: { message?: string } | null = await response.json().catch(() => null);
-    throw new Error(`${response.status} ${body?.message ?? response.statusText}`);
+    const body: { message?: string } | null = await response
+      .json()
+      .catch(() => null);
+    throw new Error(
+      `${response.status} ${body?.message ?? response.statusText}`,
+    );
   }
 
   return response.json() as Promise<T>;

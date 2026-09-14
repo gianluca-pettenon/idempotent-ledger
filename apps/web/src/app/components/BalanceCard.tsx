@@ -8,13 +8,25 @@ type BalanceCardProps = {
   transactions: Transaction[];
 };
 
-const OUTGOING_TYPES: ReadonlySet<Transaction['type']> = new Set(['withdraw', 'transfer_out']);
+const OUTGOING_TYPES: ReadonlySet<Transaction['type']> = new Set([
+  'withdraw',
+  'transfer_out',
+]);
 
-const TRANSACTION_LABEL: Record<Transaction['type'], (counterpartyName?: string) => string> = {
+const TRANSACTION_LABEL: Record<
+  Transaction['type'],
+  (counterpartyName?: string) => string
+> = {
   deposit: () => STATEMENT.BADGE.DEPOSIT,
   withdraw: () => STATEMENT.BADGE.WITHDRAWAL,
-  transfer_in: (counterpartyName) => counterpartyName ? STATEMENT.transferFrom(counterpartyName) : STATEMENT.INCOMING_TRANSFER,
-  transfer_out: (counterpartyName) => counterpartyName ? STATEMENT.transferTo(counterpartyName) : STATEMENT.OUTGOING_TRANSFER,
+  transfer_in: (counterpartyName) =>
+    counterpartyName
+      ? STATEMENT.transferFrom(counterpartyName)
+      : STATEMENT.INCOMING_TRANSFER,
+  transfer_out: (counterpartyName) =>
+    counterpartyName
+      ? STATEMENT.transferTo(counterpartyName)
+      : STATEMENT.OUTGOING_TRANSFER,
 };
 
 function getTransactionViewModel(transaction: Transaction) {

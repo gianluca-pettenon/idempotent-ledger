@@ -10,10 +10,6 @@ export const ACCOUNT = {
   SELECT_ACCOUNT: 'Select an account',
 } as const;
 
-export const UI = {
-  CLOSE_DRAWER: 'Close drawer',
-} as const;
-
 export const FORM = {
   AMOUNT: 'Amount',
   AMOUNT_PER_REQUEST: 'Amount per request',
@@ -28,7 +24,7 @@ export const FORM = {
 } as const;
 
 export const CONCURRENCY = {
-  DRAWER: {
+  HEADER: {
     TITLE: 'Concurrency lab',
     DESCRIPTION: 'Simulate retries and see how idempotency protects the ledger.',
   },
