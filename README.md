@@ -74,25 +74,26 @@ cp .env.example .env
 
 Set `POSTGRES_PASSWORD` — the `Postgres` container refuses to initialize without it.
 
-**2. Install and start Postgres**
+**2. Install dependencies**
 
 ```bash
 bun install
-docker compose up postgres -d
 ```
 
-**3. Create the schema and seed data**
+Needed even though the app itself runs in `Docker`: `make migrate` and `make studio` shell out to `drizzle-kit` locally.
+
+**3. Start Postgres and create the schema**
 
 ```bash
-bun run db:migrate
+make migrate
 ```
 
-Creates every table and seeds `User A`–`User D`, each with a $0 balance. This comes before anything else — on an empty database every route fails with `relation "users" does not exist`.
+Starts the `Postgres` container and applies every migration, seeding `User A`–`User D`, each with a $0 balance. This comes before anything else — on an empty database every route fails with `relation "users" does not exist`.
 
 **4. Start the stack**
 
 ```bash
-bun run dev
+make up
 ```
 
 Web on `localhost:3000`, API on `localhost:3001`. Open the web app, pick a user, and run the "Concurrency lab": fire deposits with the same idempotency key and watch three of four collapse into `duplicate`; drop the key and watch all four apply for real.
@@ -100,18 +101,21 @@ Web on `localhost:3000`, API on `localhost:3001`. Open the web app, pick a user,
 ## Commands
 
 ```bash
-bun run dev          # API + web, both with hot reload
-bun test             # full suite, including integration tests against the Postgres above
-bun run db:migrate   # apply pending migrations
-bun run db:generate  # scaffold a new migration from schema.ts changes
-bun run db:studio    # browse the database
+make up                # start Postgres, API, and web via Docker
+make down               # stop everything started with `make up`
+make migrate            # start Postgres (if needed) and apply pending migrations
+make studio             # browse the database
+
+bun run dev             # API + web locally, both with hot reload (alternative to `make up`)
+bun test                # full suite, including integration tests against the Postgres above
+bun run db:generate     # scaffold a new migration from schema.ts changes
 ```
 
 ## After changing dependencies
 
 ```bash
 docker compose build api web
-docker compose up -d
+make up
 ```
 
 The API and web Docker images copy each `packages/*` folder by name into their final build stage. A new workspace dependency needs a rebuild either way — hot reload inside a running container never reaches a stale image.
@@ -120,8 +124,7 @@ The API and web Docker images copy each `packages/*` folder by name into their f
 
 ```bash
 docker compose down -v
-docker compose up postgres -d
-bun run db:migrate
+make migrate
 ```
 
-`down -v` drops the Postgres volume along with every balance and transaction created while testing; `db:migrate` brings back the schema and the four zero-balance users.
+`down -v` drops the Postgres volume along with every balance and transaction created while testing; `make migrate` brings back the schema and the four zero-balance users.
