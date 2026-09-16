@@ -1,7 +1,3 @@
-# Banking Ledger
-
-A double-entry ledger `API` built with `Bun`, `Elysia`, and `Postgres` — every deposit, withdrawal, and transfer is idempotent and safe under concurrency, without weakening either guarantee to make the other easier.
-
 ## Flow
 
 **1. Idempotent write**
@@ -64,45 +60,14 @@ Deposits and withdrawals only touch one account and write one ledger entry — t
 
 ## Getting started
 
-`Docker` and `Bun` 1.4+ are the only requirements.
-
-**1. Configure**
+`Docker` is the only requirement.
 
 ```bash
-cp .env.example .env
-```
-
-Set `POSTGRES_PASSWORD` — the `Postgres` container refuses to initialize without it.
-
-**2. Install dependencies**
-
-```bash
-bun install
-```
-
-Needed even though the app itself runs in `Docker`: `make migrate` and `make studio` shell out to `drizzle-kit` locally.
-
-**3. Start Postgres and create the schema**
-
-```bash
-make migrate
-```
-
-Starts the `Postgres` container and applies every migration, seeding `User A`–`User D`, each with a $0 balance. This comes before anything else — on an empty database every route fails with `relation "users" does not exist`.
-
-**4. Start the stack**
-
-```bash
-make up
+cp .env.local .env   # set POSTGRES_PASSWORD — Postgres refuses to start without it
+make migrate            # start Postgres and apply every migration
+make up                 # start Postgres, API, and web via Docker
+make down               # stop all services
+make studio             # opens database browser
 ```
 
 Web on `localhost:3000`, API on `localhost:3001`. Open the web app, pick a user, and run the "Concurrency lab": fire deposits with the same idempotency key and watch three of four collapse into `duplicate`; drop the key and watch all four apply for real.
-
-## Commands
-
-```bash
-make up                 # start Postgres, API, and web via Docker
-make down               # stop everything started with `make up`
-make migrate            # start Postgres (if needed) and apply pending migrations
-make studio             # browse the database
-```

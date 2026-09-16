@@ -1,4 +1,5 @@
 import { openapi } from "@elysia/openapi";
+import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
 import { mapDomainErrors } from "@api/errors";
 import { accountsRoutes } from "@api/routes/accounts.routes";
@@ -9,6 +10,13 @@ import { usersRoutes } from "@api/routes/users.routes";
 const port = Number(Bun.env.API_PORT);
 
 const app = new Elysia({ prefix: "/api" })
+	.use(
+		cors({
+			origin: Bun.env.WEB_ORIGIN,
+			methods: ["GET", "POST"],
+			allowedHeaders: ["Content-Type", "Idempotency-Key", "X-Request-Id"],
+		}),
+	)
 	.use(openapi({ path: "/docs" }))
 	.onError(mapDomainErrors)
 	.use(healthRoutes)
