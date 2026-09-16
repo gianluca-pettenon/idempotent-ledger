@@ -101,30 +101,8 @@ Web on `localhost:3000`, API on `localhost:3001`. Open the web app, pick a user,
 ## Commands
 
 ```bash
-make up                # start Postgres, API, and web via Docker
+make up                 # start Postgres, API, and web via Docker
 make down               # stop everything started with `make up`
 make migrate            # start Postgres (if needed) and apply pending migrations
 make studio             # browse the database
-
-bun run dev             # API + web locally, both with hot reload (alternative to `make up`)
-bun test                # full suite, including integration tests against the Postgres above
-bun run db:generate     # scaffold a new migration from schema.ts changes
 ```
-
-## After changing dependencies
-
-```bash
-docker compose build api web
-make up
-```
-
-The API and web Docker images copy each `packages/*` folder by name into their final build stage. A new workspace dependency needs a rebuild either way — hot reload inside a running container never reaches a stale image.
-
-## Starting over
-
-```bash
-docker compose down -v
-make migrate
-```
-
-`down -v` drops the Postgres volume along with every balance and transaction created while testing; `make migrate` brings back the schema and the four zero-balance users.
