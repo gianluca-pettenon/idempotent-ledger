@@ -63,7 +63,8 @@ Deposits and withdrawals only touch one account and write one ledger entry — t
 `Docker` is the only requirement.
 
 ```bash
-cp .env.local .env   # set POSTGRES_PASSWORD — Postgres refuses to start without it
+cp .env.local .env      # set POSTGRES_PASSWORD — Postgres refuses to start without it
+
 make migrate            # start Postgres and apply every migration
 make up                 # start Postgres, API, and web via Docker
 make down               # stop all services
