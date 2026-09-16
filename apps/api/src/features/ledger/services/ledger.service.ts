@@ -15,6 +15,37 @@ import { UsersRepository } from "@api/features/ledger/repositories/users.reposit
 const MAX_LOCK_RETRIES = 5;
 const RECENT_TRANSACTIONS_LIMIT = 20;
 
+export function assertPositiveAmount(amount: number) {
+	if (amount <= 0) {
+		throw new InvalidAmountError("Amount must be greater than zero");
+	}
+}
+
+export function calculateNewBalance(currentBalance: number, amount: number, direction: 1 | -1) {
+	return currentBalance + direction * amount;
+}
+
+export function assertSufficientBalance(accountId: string, newBalance: number) {
+	if (newBalance < 0) {
+		throw new InsufficientBalanceError(`Account ${accountId} has insufficient balance`);
+	}
+}
+
+async function updateBalanceOrThrow(
+	accountsRepository: AccountsRepository,
+	accountId: string,
+	newBalance: number,
+	expectedVersion: number,
+) {
+	const updated = await accountsRepository.updateBalanceWithVersion(accountId, newBalance, expectedVersion);
+
+	if (!updated) {
+		throw new OptimisticLockError(`Account ${accountId} was updated concurrently`);
+	}
+
+	return updated;
+}
+
 export async function listUsers(client: DbClient = db) {
 	return new UsersRepository(client).findAll();
 }
@@ -95,21 +126,10 @@ async function applyMovement(tx: DbClient, params: DepositOrWithdrawParams, kind
 		throw new AccountNotFoundError(`Account not found for user ${params.userId}`);
 	}
 
-	const newBalance = account.balance + direction * params.amount;
+	const newBalance = calculateNewBalance(account.balance, params.amount, direction);
+	assertSufficientBalance(account.id, newBalance);
 
-	if (newBalance < 0) {
-		throw new InsufficientBalanceError(`Account ${account.id} has insufficient balance`);
-	}
-
-	const updatedAccounts = await accountsRepository.updateBalanceWithVersion(
-		account.id,
-		newBalance,
-		account.version,
-	);
-
-	if (updatedAccounts.length === 0) {
-		throw new OptimisticLockError(`Account ${account.id} was updated concurrently`);
-	}
+	const updatedAccount = await updateBalanceOrThrow(accountsRepository, account.id, newBalance, account.version);
 
 	const ledgerRepository = new LedgerRepository(tx);
 	const transaction = await ledgerRepository.insertTransaction({
@@ -130,38 +150,40 @@ async function applyMovement(tx: DbClient, params: DepositOrWithdrawParams, kind
 		},
 	]);
 
-	return updatedAccounts[0];
+	return updatedAccount;
+}
+
+function runIdempotentOperation<T>(
+	scope: string,
+	idempotencyKey: string | null,
+	requestPayload: unknown,
+	operation: (tx: DbClient) => Promise<T>,
+	client: DbClient,
+) {
+	return withOptimisticLockRetry(() => withIdempotency(scope, idempotencyKey, requestPayload, operation, client));
 }
 
 export async function deposit(params: DepositOrWithdrawParams, client: DbClient = db) {
-	if (params.amount <= 0) {
-		throw new InvalidAmountError("Amount must be greater than zero");
-	}
+	assertPositiveAmount(params.amount);
 
-	return withOptimisticLockRetry(() =>
-		withIdempotency(
-			OperationKind.Deposit,
-			params.idempotencyKey,
-			{ userId: params.userId, amount: params.amount },
-			(tx) => applyMovement(tx, params, "deposit"),
-			client,
-		),
+	return runIdempotentOperation(
+		OperationKind.Deposit,
+		params.idempotencyKey,
+		{ userId: params.userId, amount: params.amount },
+		(tx) => applyMovement(tx, params, "deposit"),
+		client,
 	);
 }
 
 export async function withdraw(params: DepositOrWithdrawParams, client: DbClient = db) {
-	if (params.amount <= 0) {
-		throw new InvalidAmountError("Amount must be greater than zero");
-	}
+	assertPositiveAmount(params.amount);
 
-	return withOptimisticLockRetry(() =>
-		withIdempotency(
-			OperationKind.Withdraw,
-			params.idempotencyKey,
-			{ userId: params.userId, amount: params.amount },
-			(tx) => applyMovement(tx, params, "withdraw"),
-			client,
-		),
+	return runIdempotentOperation(
+		OperationKind.Withdraw,
+		params.idempotencyKey,
+		{ userId: params.userId, amount: params.amount },
+		(tx) => applyMovement(tx, params, "withdraw"),
+		client,
 	);
 }
 
@@ -188,38 +210,30 @@ async function applyTransfer(tx: DbClient, params: TransferParams) {
 		throw new AccountNotFoundError(`Account not found for user ${params.toUserId}`);
 	}
 
-	const newFromBalance = fromAccount.balance - params.amount;
+	const newFromBalance = calculateNewBalance(fromAccount.balance, params.amount, -1);
+	assertSufficientBalance(fromAccount.id, newFromBalance);
 
-	if (newFromBalance < 0) {
-		throw new InsufficientBalanceError(`Account ${fromAccount.id} has insufficient balance`);
-	}
+	const newToBalance = calculateNewBalance(toAccount.balance, params.amount, 1);
 
-	const newToBalance = toAccount.balance + params.amount;
-
+	// Update accounts in a stable order (lowest id first) so concurrent transfers between
+	// the same two accounts in opposite directions can't deadlock on row locks.
 	const [firstAccount, firstBalance, secondAccount, secondBalance] =
 		fromAccount.id < toAccount.id
 			? [fromAccount, newFromBalance, toAccount, newToBalance]
 			: [toAccount, newToBalance, fromAccount, newFromBalance];
 
-	const [firstUpdated] = await accountsRepository.updateBalanceWithVersion(
+	const firstUpdated = await updateBalanceOrThrow(
+		accountsRepository,
 		firstAccount.id,
 		firstBalance,
 		firstAccount.version,
 	);
-
-	if (!firstUpdated) {
-		throw new OptimisticLockError(`Account ${firstAccount.id} was updated concurrently`);
-	}
-
-	const [secondUpdated] = await accountsRepository.updateBalanceWithVersion(
+	const secondUpdated = await updateBalanceOrThrow(
+		accountsRepository,
 		secondAccount.id,
 		secondBalance,
 		secondAccount.version,
 	);
-
-	if (!secondUpdated) {
-		throw new OptimisticLockError(`Account ${secondAccount.id} was updated concurrently`);
-	}
 
 	const updatedFromAccount = firstAccount.id === fromAccount.id ? firstUpdated : secondUpdated;
 
@@ -242,21 +256,17 @@ async function applyTransfer(tx: DbClient, params: TransferParams) {
 }
 
 export async function transfer(params: TransferParams, client: DbClient = db) {
-	if (params.amount <= 0) {
-		throw new InvalidAmountError("Amount must be greater than zero");
-	}
+	assertPositiveAmount(params.amount);
 
 	if (params.fromUserId === params.toUserId) {
 		throw new SameAccountTransferError("Cannot transfer to the same account");
 	}
 
-	return withOptimisticLockRetry(() =>
-		withIdempotency(
-			OperationKind.Transfer,
-			params.idempotencyKey,
-			{ fromUserId: params.fromUserId, toUserId: params.toUserId, amount: params.amount },
-			(tx) => applyTransfer(tx, params),
-			client,
-		),
+	return runIdempotentOperation(
+		OperationKind.Transfer,
+		params.idempotencyKey,
+		{ fromUserId: params.fromUserId, toUserId: params.toUserId, amount: params.amount },
+		(tx) => applyTransfer(tx, params),
+		client,
 	);
 }

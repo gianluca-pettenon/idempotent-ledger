@@ -11,7 +11,7 @@ export class AccountsRepository {
 	}
 
 	async updateBalanceWithVersion(accountId: string, newBalance: number, expectedVersion: number) {
-		return await this.client
+		const [updated] = await this.client
 			.update(accounts)
 			.set({
 				balance: newBalance,
@@ -20,5 +20,7 @@ export class AccountsRepository {
 			})
 			.where(and(eq(accounts.id, accountId), eq(accounts.version, expectedVersion)))
 			.returning();
+
+		return updated;
 	}
 }
