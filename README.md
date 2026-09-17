@@ -72,3 +72,7 @@ make studio             # opens database browser
 ```
 
 Web on `localhost:3000`, API on `localhost:3001`. Open the web app, pick a user, and run the "Concurrency lab": fire deposits with the same idempotency key and watch three of four collapse into `duplicate`; drop the key and watch all four apply for real.
+
+## Preview
+
+![PREVIEW](./apps/web/public/preview.png)
