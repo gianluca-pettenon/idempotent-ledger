@@ -16,12 +16,12 @@ sequenceDiagram
         A->>P: debit + credit both accounts (version check)
         A->>P: UPDATE idempotency_keys SET response, completed_at
         A->>P: COMMIT
-        A-->>C: 200 { outcome: "processed" }
+        A-->>C: 200 { success, account, meta: { outcome: "processed" } }
     else Key already exists
         P-->>A: 0 rows (conflict)
         A->>P: SELECT the existing record
         alt same request payload
-            A-->>C: 200 { outcome: "duplicate" } (saved response, nothing re-applied)
+            A-->>C: 200 { success, account, meta: { outcome: "duplicate" } } (saved response, nothing re-applied)
         else different payload, same key
             A-->>C: 409 key reused with a different request
         end
@@ -52,7 +52,7 @@ sequenceDiagram
 
 An `INSERT ... ON CONFLICT DO NOTHING` on a unique `(scope, key)` index is the only thing deciding who "wins" a race between duplicate requests — not application code. Reservation, business logic, and marking the key complete all happen inside one `db.transaction`, so a crash or a lock conflict midway rolls back the reservation too. A retried request never finds a half-finished key: either it doesn't exist yet, or it's fully committed with a saved response ready to replay.
 
-Balances use optimistic locking instead of `SELECT ... FOR UPDATE`: a `version` column and a compare-and-swap `UPDATE ... WHERE id = ? AND version = ?`. Zero rows updated means someone else moved first, and the whole operation — idempotency check included — retries from a fresh read. This holds under plain `READ COMMITTED`, needs no row locks held across round trips, and is exactly what the web app's "Concurrency lab" demonstrates live: fire four requests at once, watch one win and three retry cleanly.
+Balances use optimistic locking instead of `SELECT ... FOR UPDATE`: a `version` column and a compare-and-swap `UPDATE ... WHERE id = ? AND version = ?`. Zero rows updated means someone else moved first, and the whole operation — idempotency check included — retries from a fresh read. This holds under plain `READ COMMITTED` and needs no row locks held across round trips. The lab runs both cases. Four deposits with the same idempotency key collapse into one `processed` and three `duplicate`. Four deposits without a key all apply, and a request that loses the version check retries from a fresh read.
 
 A transfer is the one operation touching two account rows at once, so it always updates them in the same fixed order (lower `id` first) no matter which account is sending and which is receiving. Two transfers moving money in opposite directions between the same two accounts would otherwise lock each other out — the same problem as two threads acquiring two mutexes in reverse order. Fixed ordering makes that deadlock structurally impossible instead of something to catch and retry.
 
@@ -62,9 +62,19 @@ Deposits and withdrawals only touch one account and write one ledger entry — t
 
 `Docker` is the only requirement.
 
-```bash
-cp .env.local .env      # set POSTGRES_PASSWORD — Postgres refuses to start without it
+Create `.env` in the repo root. Postgres refuses to start without `POSTGRES_PASSWORD`.
 
+```
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=
+POSTGRES_DB=banking-ledger
+POSTGRES_PORT=5432
+
+PORT=3000
+API_PORT=3001
+```
+
+```bash
 make migrate            # start Postgres and apply every migration
 make up                 # start Postgres, API, and web via Docker
 make down               # stop all services
