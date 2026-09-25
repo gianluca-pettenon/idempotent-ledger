@@ -1,7 +1,6 @@
 import { openapi } from "@elysia/openapi";
 import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
-import { mapDomainErrors } from "@api/errors";
 import { accountsRoutes } from "@api/routes/accounts.routes";
 import { healthRoutes } from "@api/routes/health.routes";
 import { transfersRoutes } from "@api/routes/transfers.routes";
@@ -18,7 +17,6 @@ const app = new Elysia({ prefix: "/api" })
 		}),
 	)
 	.use(openapi({ path: "/docs" }))
-	.onError(mapDomainErrors)
 	.use(healthRoutes)
 	.use(usersRoutes)
 	.use(accountsRoutes)
