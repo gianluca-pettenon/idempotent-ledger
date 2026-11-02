@@ -15,7 +15,6 @@ WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json tsconfig.json ./
 COPY apps/api ./apps/api
-COPY packages/db ./packages/db
 COPY packages/shared ./packages/shared
 
 COPY --from=dependencies /app/apps/api/node_modules ./apps/api/node_modules

@@ -3,16 +3,15 @@
 	"private": true,
 	"type": "module",
 	"dependencies": {
-		"@banking-ledger/db": "workspace:*",
 		"@banking-ledger/shared": "workspace:*",
 		"@elysia/openapi": "^1.4.16",
 		"@elysiajs/cors": "^1.4.2",
-		"drizzle-orm": "^0.44.5",
+		"@kurrent/kurrentdb-client": "1.3.1",
 		"elysia": "^1.4.30"
 	},
 	"scripts": {
 		"dev": "bun --hot run src/server.ts",
 		"start": "bun run src/server.ts",
-		"test": "bun --env-file=../../.env test src"
+		"test": "bun test src"
 	}
 }

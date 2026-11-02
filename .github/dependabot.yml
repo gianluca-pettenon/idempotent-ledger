@@ -16,7 +16,6 @@ updates:
     directories:
       - /apps/api
       - /apps/web
-      - /packages/db
     schedule:
       interval: weekly
 

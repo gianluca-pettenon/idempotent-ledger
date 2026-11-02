@@ -1,25 +1,19 @@
 -include .env
 export
 
-COMPOSE      := docker compose
-NETWORK      := banking-ledger_default
-DB_TOOLS     := banking-ledger-db-tools
-DATABASE_URL := postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:$(POSTGRES_PORT)/$(POSTGRES_DB)
+COMPOSE := docker compose
+TEST_DB := banking-ledger-kurrentdb-test
 
-.PHONY: up down migrate studio
+.PHONY: up down test
 
 up:
-	$(COMPOSE) up -d
+	$(COMPOSE) up -d --build
 
 down:
 	$(COMPOSE) down
 
-migrate:
-	$(COMPOSE) up -d --wait postgres
-	docker build -q -f packages/db/Dockerfile -t $(DB_TOOLS) .
-	docker run --rm --network $(NETWORK) -e DATABASE_URL=$(DATABASE_URL) $(DB_TOOLS) bun run db:migrate
-
-studio:
-	$(COMPOSE) up -d --wait postgres
-	docker build -q -f packages/db/Dockerfile -t $(DB_TOOLS) .
-	docker run --rm -p 4983:4983 --network $(NETWORK) -e DATABASE_URL=$(DATABASE_URL) $(DB_TOOLS) bun run db:studio
+# Throwaway in-memory KurrentDB so tests never touch dev data.
+test:
+	docker run -d --rm --name $(TEST_DB) -p 2114:2113 -e KURRENTDB_INSECURE=true -e KURRENTDB_MEM_DB=true docker.kurrent.io/kurrent-latest/kurrentdb:26.1 >/dev/null
+	until curl -sf http://localhost:2114/health/live >/dev/null; do sleep 1; done
+	KURRENTDB_URL="kurrentdb://localhost:2114?tls=false" bun test apps/api; status=$$?; docker stop $(TEST_DB) >/dev/null; exit $$status
