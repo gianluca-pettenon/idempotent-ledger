@@ -1,10 +1,11 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { createAccount } from "@api/features/ledger/services/ledger.service";
+import { NO_STREAM } from "@kurrent/kurrentdb-client";
+import { EventType } from "@api/features/ledger/domain/ledger.events";
+import { appendEvents } from "@api/features/ledger/repositories/ledger.repository";
 import { findCheckpoint } from "@api/features/projection/repositories/projection.repository";
 import { balancesProjector } from "@api/features/projection/services/balances.projector";
 import { ProjectorName, runProjector } from "@api/features/projection/services/projection.service";
 import { statementsProjector } from "@api/features/projection/services/statements.projector";
-import { seed } from "@api/seed";
 import { app } from "@api/server";
 
 async function post(path: string, body: unknown, idempotencyKey?: string) {
@@ -48,7 +49,7 @@ const account = (accountId: string, balance: number, lines?: number) =>
 
 async function openAccount(ownerName: string) {
 	const accountId = Bun.randomUUIDv7();
-	await createAccount(accountId, ownerName);
+	await appendEvents([{ accountId, revision: NO_STREAM, event: { type: EventType.AccountCreated, data: { accountId, ownerName } } }]);
 
 	return accountId;
 }
@@ -62,18 +63,6 @@ const deposit = (accountId: string, amount: unknown, key?: string) => post(`/acc
 const withdraw = (accountId: string, amount: number) => post(`/accounts/${accountId}/withdrawals`, { amount });
 
 describe("ledger", () => {
-	test("the seed opens the default accounts once, however often it runs", async () => {
-		await seed();
-		await seed();
-
-		const accounts = await eventually(
-			() => get("/accounts"),
-			(accounts: { name: string }[]) => accounts.some((account) => account.name === "User D"),
-		);
-
-		expect(accounts.filter((account: { name: string }) => account.name.startsWith("User "))).toHaveLength(4);
-	});
-
 	test("a new account starts at zero in the read model", async () => {
 		const zero = await openAccount("Zero");
 

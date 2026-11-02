@@ -1,6 +1,5 @@
 import { OperationKind } from "@banking-ledger/shared";
 import {
-	decideCreate,
 	decideDeposit,
 	decideTransfer,
 	decideWithdraw,
@@ -50,15 +49,6 @@ async function execute<T extends object>(request: Operation, key: string | null,
 	}
 
 	throw new Error("Account is under heavy contention, retry later", { cause: 409 });
-}
-
-export function createAccount(accountId: string, ownerName: string) {
-	return execute({ accountId, ownerName }, null, async () => {
-		const account = await loadAccount(accountId);
-		const event = decideCreate(account, ownerName);
-
-		return { appends: [{ accountId, revision: account.revision, event }], response: { accountId, balance: 0 } };
-	});
 }
 
 export function deposit(accountId: string, amount: number, key: string | null) {

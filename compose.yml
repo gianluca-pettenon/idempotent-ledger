@@ -28,17 +28,6 @@ services:
       timeout: 5s
       retries: 10
 
-  seed:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    command: ["bun", "run", "apps/api/src/seed.ts"]
-    environment:
-      KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
-    depends_on:
-      kurrentdb:
-        condition: service_healthy
-
   # One process per read-model view, each with its own checkpoint.
   balances-projector: &projector
     build:

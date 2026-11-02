@@ -4,7 +4,7 @@ An event-sourced ledger with CQRS, split into processes that only meet through t
 
 - **KurrentDB** ([formerly EventStoreDB](https://www.kurrent.io/)) is the source of truth. Every fact, from opening an account to moving money, is an immutable event.
 - **MongoDB** holds the read model: one document per account and one per statement line, projected from the events.
-- **api** decides and appends. **balances-projector** and **statements-projector** each subscribe and write their own view in MongoDB. **seed** opens the default accounts. Each scales and fails on its own: the API is stateless, so it can run many replicas, and optimistic concurrency keeps them consistent.
+- **api** decides and appends. **balances-projector** and **statements-projector** each subscribe and write their own view in MongoDB. **migrate** opens the default accounts once. Each scales and fails on its own: the API is stateless, so it can run many replicas, and optimistic concurrency keeps them consistent.
 
 It is not a payment rail or a bank core. It shows idempotent commands, optimistic concurrency, atomic multi-account writes, and a rebuildable read model.
 
@@ -77,7 +77,7 @@ POST /transfers   Idempotency-Key: K
 - **Idempotency** is a stream that can be created only once. Two concurrent requests with the same key race on `no_stream`; the loser retries, finds the record and replays it.
 - **Idempotency lives in the event store** because it is written in the same atomic append as the money. A key kept in Redis or the read model would be a dual write: a crash between the two either loses the key (the retry moves money twice) or keeps a key for an append that never happened.
 
-Accounts are opened only by the seed, with fixed ids: a rerun is refused by the domain (account already exists), so it is safe.
+Accounts are opened only by the migration, with fixed ids: it appends `AccountCreated` as `NO_STREAM`, so a rerun is refused by the event store and changes nothing.
 
 The idempotency scope is `(account, key)`, and the stored request includes the operation, so reusing a key for a different payload is a 409.
 
@@ -86,7 +86,7 @@ The idempotency scope is `(account, key)`, and the stored request includes the o
 ```text
 apps/api/src/
   server.ts                    composes the features into one Elysia app
-  seed.ts                      opens the default accounts through the ledger, with fixed ids (safe to rerun)
+  migrate.ts                   one-off migration: appends AccountCreated for the default accounts, with fixed ids
   features/
     ledger/                        write side (KurrentDB)
       domain/ledger.events.ts               every event type and stream prefix in KurrentDB (enums)
@@ -126,7 +126,7 @@ API_PORT=3001
 ```
 
 ```bash
-make up      # KurrentDB, MongoDB, seed, projectors, API and web
+make up      # KurrentDB, MongoDB, migration, projectors, API and web
 make down    # stop everything
 make test    # API tests against throwaway KurrentDB and MongoDB
 ```

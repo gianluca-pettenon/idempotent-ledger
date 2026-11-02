@@ -45,14 +45,6 @@ function assertFunds(account: Account, amount: number) {
 	}
 }
 
-export function decideCreate(account: Account, ownerName: string): AccountEvent {
-	if (account.opened) {
-		throw new Error(`Account ${account.accountId} already exists`, { cause: 409 });
-	}
-
-	return { type: EventType.AccountCreated, data: { accountId: account.accountId, ownerName } };
-}
-
 export function decideDeposit(account: Account, amount: number): AccountEvent {
 	assertOpened(account);
 	assertAmount(amount);
