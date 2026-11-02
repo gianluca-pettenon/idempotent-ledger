@@ -5,14 +5,14 @@ type Movement = { amount: number };
 type Transfer = { fromUserId: string; toUserId: string; amount: number };
 
 export const ledgerRoutes = new Elysia()
-	.post("/accounts/:userId/deposits", ({ params, body, headers }) =>
-		deposit(params.userId, (body as Movement).amount, headers["idempotency-key"] ?? null),
+	.post("/accounts/:userId/deposits", ({ params, body, request }) =>
+		deposit(params.userId, (body as Movement).amount, request.headers.get("Idempotency-Key")),
 	)
-	.post("/accounts/:userId/withdrawals", ({ params, body, headers }) =>
-		withdraw(params.userId, (body as Movement).amount, headers["idempotency-key"] ?? null),
+	.post("/accounts/:userId/withdrawals", ({ params, body, request }) =>
+		withdraw(params.userId, (body as Movement).amount, request.headers.get("Idempotency-Key")),
 	)
-	.post("/transfers", ({ body, headers }) => {
+	.post("/transfers", ({ body, request }) => {
 		const { fromUserId, toUserId, amount } = body as Transfer;
 
-		return transfer(fromUserId, toUserId, amount, headers["idempotency-key"] ?? null);
+		return transfer(fromUserId, toUserId, amount, request.headers.get("Idempotency-Key"));
 	});
