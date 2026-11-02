@@ -1,57 +1,16 @@
 import { openapi } from "@elysia/openapi";
 import { cors } from "@elysiajs/cors";
-import { TransactionKind } from "@banking-ledger/shared";
-import { Elysia, t } from "elysia";
-import { deposit, LedgerError, seedDefaultUsers, transfer, withdraw } from "@api/ledger";
-import { getAccount, listUsers, migrate } from "@api/projection";
-
-const amount = t.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER });
-
-const idempotencyKey = (headers: Record<string, string | undefined>) => headers["idempotency-key"]?.trim() || null;
-
-const reply = ({ balance, outcome }: { balance: number; outcome: string }) => ({ balance, meta: { outcome } });
+import { Elysia } from "elysia";
+import { seedDefaultUsers } from "@api/features/ledger/ledger";
+import { ledgerRoutes } from "@api/features/ledger/ledger.routes";
+import { migrate } from "@api/features/projection/projection";
+import { projectionRoutes } from "@api/features/projection/projection.routes";
 
 export const app = new Elysia({ prefix: "/api" })
-	.use(
-		cors({
-			origin: Bun.env.WEB_ORIGIN,
-			methods: ["GET", "POST"],
-			allowedHeaders: ["Content-Type", "Idempotency-Key", "X-Request-Id"],
-		}),
-	)
+	.use(cors({ origin: Bun.env.WEB_ORIGIN, allowedHeaders: ["Content-Type", "Idempotency-Key", "X-Request-Id"] }))
 	.use(openapi({ path: "/docs" }))
-	.error({ LedgerError })
-	.onError(({ code, error, set }) => {
-		if (code !== "LedgerError") return;
-
-		set.status = error.status;
-		return { message: error.message };
-	})
-	.get("/health", () => ({ ok: true }))
-	.get("/users", async () => ({ users: await listUsers() }))
-	.get("/accounts/:userId", async ({ params }) => ({ account: await getAccount(params.userId) }), {
-		params: t.Object({ userId: t.String({ format: "uuid" }) }),
-	})
-	.post(
-		"/accounts/:userId/transactions",
-		async ({ body, params, headers }) => {
-			const move = body.type === TransactionKind.Deposit ? deposit : withdraw;
-
-			return reply(await move(params.userId, body.amount, idempotencyKey(headers)));
-		},
-		{
-			body: t.Object({
-				type: t.Union([t.Literal(TransactionKind.Deposit), t.Literal(TransactionKind.Withdraw)]),
-				amount,
-			}),
-		},
-	)
-	.post(
-		"/transfers",
-		async ({ body, headers }) =>
-			reply(await transfer(body.fromUserId, body.toUserId, body.amount, idempotencyKey(headers))),
-		{ body: t.Object({ fromUserId: t.String(), toUserId: t.String(), amount }) },
-	);
+	.use(ledgerRoutes)
+	.use(projectionRoutes);
 
 if (import.meta.main) {
 	await Promise.all([migrate(), seedDefaultUsers()]);

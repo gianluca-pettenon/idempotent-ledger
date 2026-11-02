@@ -12,13 +12,6 @@ export const OPERATION_KINDS: readonly OperationKind[] = [
   OperationKind.Transfer,
 ];
 
-export const TransactionKind = {
-  Deposit: OperationKind.Deposit,
-  Withdraw: OperationKind.Withdraw,
-} as const;
-
-export type TransactionKind = (typeof TransactionKind)[keyof typeof TransactionKind];
-
 export const CONCURRENCY_DEMO = {
   REQUEST_COUNT: 4,
   DEFAULT_AMOUNT: 10,

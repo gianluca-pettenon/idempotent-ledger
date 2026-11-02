@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { openAccounts } from "@api/ledger";
-import { migrate, runProjector } from "@api/projection";
+import { openAccounts } from "@api/features/ledger/ledger";
+import { migrate, runProjector } from "@api/features/projection/projection";
 import { app } from "@api/server";
 
 async function post(path: string, body: unknown, idempotencyKey?: string) {
@@ -33,15 +33,15 @@ beforeAll(async () => {
 	runProjector();
 });
 
-const deposit = (userId: string, amount: number, key?: string) =>
-	post(`/accounts/${userId}/transactions`, { type: "deposit", amount }, key);
+const deposit = (userId: string, amount: unknown, key?: string) => post(`/accounts/${userId}/deposits`, { amount }, key);
+const withdraw = (userId: string, amount: number) => post(`/accounts/${userId}/withdrawals`, { amount });
 
 describe("ledger", () => {
 	test("deposit, withdraw and statement", async () => {
 		const [alice] = await openAccounts(["Alice"]);
 
-		expect((await deposit(alice.id, 100)).body).toEqual({ balance: 100, meta: { outcome: "processed" } });
-		expect((await post(`/accounts/${alice.id}/transactions`, { type: "withdraw", amount: 30 })).body.balance).toBe(70);
+		expect((await deposit(alice.id, 100)).body).toEqual({ balance: 100, outcome: "processed" });
+		expect((await withdraw(alice.id, 30)).body.balance).toBe(70);
 
 		const statement = await account(alice.id, 70);
 		expect(statement.transactions.map((tx: { type: string }) => tx.type)).toEqual(["withdraw", "deposit"]);
@@ -50,9 +50,10 @@ describe("ledger", () => {
 	test("rejects overdraft, invalid amounts and unknown accounts", async () => {
 		const [bob] = await openAccounts(["Bob"]);
 
-		expect((await post(`/accounts/${bob.id}/transactions`, { type: "withdraw", amount: 1 })).status).toBe(422);
+		expect((await withdraw(bob.id, 1)).status).toBe(422);
 		expect((await deposit(bob.id, 0)).status).toBe(422);
 		expect((await deposit(bob.id, 1.5)).status).toBe(422);
+		expect((await deposit(bob.id, "10")).status).toBe(422);
 		expect((await deposit(Bun.randomUUIDv7(), 10)).status).toBe(404);
 	});
 
@@ -74,7 +75,7 @@ describe("ledger", () => {
 		const [user] = await openAccounts(["Concurrent"]);
 		const results = await Promise.all(Array.from({ length: 8 }, () => deposit(user.id, 10)));
 
-		expect(results.every((result) => result.body.meta.outcome === "processed")).toBe(true);
+		expect(results.every((result) => result.body.outcome === "processed")).toBe(true);
 		await account(user.id, 80);
 	});
 
@@ -82,7 +83,7 @@ describe("ledger", () => {
 		const [user] = await openAccounts(["Idempotent"]);
 		const key = crypto.randomUUID();
 		const results = await Promise.all(Array.from({ length: 8 }, () => deposit(user.id, 10, key)));
-		const outcomes = results.map((result) => result.body.meta.outcome);
+		const outcomes = results.map((result) => result.body.outcome);
 
 		expect(outcomes.filter((outcome) => outcome === "processed")).toHaveLength(1);
 		expect(results.every((result) => result.body.balance === 10)).toBe(true);

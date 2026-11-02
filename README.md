@@ -66,14 +66,19 @@ The idempotency scope is `(user, key)`, and the stored request includes the oper
 
 ```text
 apps/api/src/
-  ledger.ts        write side: events, fold, commands, idempotency (KurrentDB)
-  projection.ts    read side: projector and queries (Postgres)
-  schema.sql       read model tables
-  server.ts        HTTP (Elysia): validation and routes
-  ledger.test.ts   end-to-end tests against real KurrentDB and Postgres
+  server.ts                    composes the features into one Elysia app
+  features/
+    ledger/                    write side (KurrentDB)
+      ledger.ts                events, fold, commands, idempotency
+      ledger.routes.ts         POST /accounts/:id/deposits, /withdrawals, /transfers
+      ledger.test.ts           end-to-end tests against real KurrentDB and Postgres
+    projection/                read side (Postgres)
+      projection.ts            projector and queries
+      projection.routes.ts     GET /users, /accounts/:id
+      schema.sql               read model tables
 ```
 
-Amounts are positive integers, validated at the HTTP boundary. The seeded users are created atomically on first start.
+Validation lives in the domain, not in the routes: the amount must be a positive integer, and unknown accounts are a 404. Errors answer `{ message }` with their status. The seeded users are created atomically on first start.
 
 ## Getting started
 

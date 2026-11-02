@@ -35,7 +35,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["bun", "run", "apps/api/src/projection.ts"]
+    command: ["bun", "run", "apps/api/src/features/projection/projection.ts"]
     restart: unless-stopped
     environment:
       KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false

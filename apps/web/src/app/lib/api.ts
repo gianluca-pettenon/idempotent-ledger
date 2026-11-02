@@ -10,12 +10,8 @@ type AccountResponse = {
   account: Account;
 };
 
-type MetaResponse = {
-  outcome?: string;
-};
-
 type TransactionResponse = {
-  meta?: MetaResponse;
+  outcome: string;
 };
 
 type RunRequestParams = {
@@ -33,12 +29,12 @@ const REQUEST_BUILDER: Record<
   (params: MovementRequestParams) => { path: string; body: unknown }
 > = {
   [OperationKind.Deposit]: (params) => ({
-    path: `/accounts/${params.userId}/transactions`,
-    body: { type: OperationKind.Deposit, amount: params.amount },
+    path: `/accounts/${params.userId}/deposits`,
+    body: { amount: params.amount },
   }),
   [OperationKind.Withdraw]: (params) => ({
-    path: `/accounts/${params.userId}/transactions`,
-    body: { type: OperationKind.Withdraw, amount: params.amount },
+    path: `/accounts/${params.userId}/withdrawals`,
+    body: { amount: params.amount },
   }),
   [OperationKind.Transfer]: (params) => ({
     path: '/transfers',
@@ -106,7 +102,7 @@ async function runRequest(
       body: JSON.stringify(body),
     });
 
-    outcome = response.meta?.outcome ?? 'processed';
+    outcome = response.outcome;
   } catch (error) {
     detail = error instanceof Error ? error.message : undefined;
   }

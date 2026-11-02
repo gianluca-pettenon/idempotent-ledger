@@ -1,6 +1,6 @@
 import { SQL, type TransactionSQL } from "bun";
 import { type RecordedEvent, START, streamNameFilter } from "@kurrent/kurrentdb-client";
-import { LedgerError, store } from "@api/ledger";
+import { LedgerError, store } from "@api/features/ledger/ledger";
 
 export const sql = new SQL(Bun.env.DATABASE_URL as string);
 

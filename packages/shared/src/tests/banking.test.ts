@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { CONCURRENCY_DEMO, OperationKind, OPERATION_KINDS, TransactionKind } from '@shared/banking.ts';
+import { CONCURRENCY_DEMO, OperationKind, OPERATION_KINDS } from '@shared/banking.ts';
 
 describe('OperationKind', () => {
   test('defines deposit, withdraw, and transfer literals', () => {
@@ -10,22 +10,6 @@ describe('OperationKind', () => {
 
   test('lists every supported operation', () => {
     expect(OPERATION_KINDS).toEqual(['deposit', 'withdraw', 'transfer']);
-  });
-});
-
-describe('TransactionKind', () => {
-  test('defines deposit and withdraw API literals', () => {
-    expect(TransactionKind.Deposit).toBe('deposit');
-    expect(TransactionKind.Withdraw).toBe('withdraw');
-  });
-
-  test('reuses the transaction subset of OperationKind', () => {
-    expect(TransactionKind.Deposit).toBe(OperationKind.Deposit);
-    expect(TransactionKind.Withdraw).toBe(OperationKind.Withdraw);
-  });
-
-  test('exposes only the supported kinds', () => {
-    expect(Object.keys(TransactionKind)).toEqual(['Deposit', 'Withdraw']);
   });
 });
 

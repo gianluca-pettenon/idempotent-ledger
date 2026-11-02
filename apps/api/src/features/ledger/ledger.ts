@@ -5,7 +5,6 @@ import {
 	StreamNotFoundError,
 	WrongExpectedVersionError,
 } from "@kurrent/kurrentdb-client";
-import type { OperationKind } from "@banking-ledger/shared";
 
 export const store = KurrentDBClient.connectionString(Bun.env.KURRENTDB_URL as string);
 
@@ -22,9 +21,7 @@ type AccountEvent =
 
 type Account = { userId: string; revision: bigint; balance: number };
 
-type Outcome = "processed" | "duplicate";
-
-type IdempotentRequest = { type: OperationKind; userId: string; toUserId?: string; amount: number };
+type IdempotentRequest = { type: string; userId: string; toUserId?: string; amount: number };
 
 type Decision = { appends: { userId: string; revision: bigint; event: AccountEvent }[]; balance: number };
 
@@ -34,6 +31,10 @@ export class LedgerError extends Error {
 		message: string,
 	) {
 		super(message);
+	}
+
+	toResponse() {
+		return Response.json({ message: this.message }, { status: this.status });
 	}
 }
 
@@ -53,7 +54,7 @@ async function readStream<T>(streamName: string) {
 	return events;
 }
 
-export function balanceOf(events: AccountEvent[]) {
+function balanceOf(events: AccountEvent[]) {
 	return events.reduce((balance, event) => {
 		switch (event.type) {
 			case "MoneyDeposited":
@@ -85,6 +86,10 @@ function assertFunds(account: Account, amount: number) {
 // Retries on optimistic-concurrency conflicts. With a key, the idempotency stream is appended in the
 // same atomic write as the money events, so a request is recorded exactly when its effect is.
 async function execute(request: IdempotentRequest, key: string | null, decide: () => Promise<Decision>) {
+	if (!Number.isSafeInteger(request.amount) || request.amount <= 0) {
+		throw new LedgerError(422, "Amount must be a positive integer");
+	}
+
 	const requestJson = JSON.stringify(request);
 	const idempotencyStream = key && `idempotency-${request.userId}-${key}`;
 
@@ -97,7 +102,7 @@ async function execute(request: IdempotentRequest, key: string | null, decide: (
 					throw new LedgerError(409, `Idempotency-Key "${key}" was already used with a different request`);
 				}
 
-				return { balance: previous.data.balance, outcome: "duplicate" as Outcome };
+				return { balance: previous.data.balance, outcome: "duplicate" };
 			}
 		}
 
@@ -119,7 +124,7 @@ async function execute(request: IdempotentRequest, key: string | null, decide: (
 		try {
 			await store.multiStreamAppend(writes);
 
-			return { balance, outcome: "processed" as Outcome };
+			return { balance, outcome: "processed" };
 		} catch (error) {
 			if (!(error instanceof WrongExpectedVersionError)) throw error;
 			if (attempt === MAX_ATTEMPTS) throw new LedgerError(409, "Account is under heavy contention, retry later");
