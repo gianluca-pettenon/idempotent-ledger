@@ -9,8 +9,6 @@ type Request = { type: OperationKind; userId: string; toUserId?: string; amount:
 
 type Decision = { appends: AccountAppend[]; balance: number };
 
-// Read, decide, append; retry on optimistic-concurrency conflicts. With a key, the request is recorded
-// in the same atomic append as its effect, so retries replay the first result instead of applying twice.
 async function execute(request: Request, key: string | null, decide: () => Promise<Decision>) {
 	for (const userId of [request.userId, request.toUserId].filter((id) => id !== undefined)) {
 		if (!(await userExists(userId))) {

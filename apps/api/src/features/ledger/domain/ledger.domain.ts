@@ -1,6 +1,3 @@
-// Pure business rules: no I/O. Each decide* turns a command into the events it produces, or throws.
-// Errors carry their HTTP status in `cause`.
-
 export enum AccountEventType {
 	MoneyDeposited = "MoneyDeposited",
 	MoneyWithdrawn = "MoneyWithdrawn",
@@ -21,7 +18,6 @@ export type AccountEvent =
 
 export type Account = { userId: string; balance: number };
 
-// How each event moves the balance. Typed over every event type, so a new event without a sign won't compile.
 const SIGN: Record<AccountEventType, 1 | -1> = {
 	[AccountEventType.MoneyDeposited]: 1,
 	[AccountEventType.TransferReceived]: 1,

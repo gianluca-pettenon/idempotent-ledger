@@ -34,10 +34,8 @@ export const CONCURRENCY = {
   WITH_IDEMPOTENCY: 'With Idempotency',
   WITHOUT_PROTECTION: 'Without Protection',
   RUN_SCENARIO: 'Run a scenario',
-  RUN_SCENARIO_HINT:
-    'Pick deposit, withdraw, or transfer — then see how many requests were sent, processed, or deduplicated.',
-  REJECTED:
-    'Rejected by the ledger (e.g. insufficient balance).',
+  RUN_SCENARIO_HINT: 'Pick deposit, withdraw, or transfer — then see how many requests were sent, processed, or deduplicated.',
+  REJECTED: 'Rejected by the ledger (e.g. insufficient balance).',
   STATS: {
     SENT: 'Sent',
     PROCESSED: 'Processed',
@@ -52,31 +50,23 @@ export const CONCURRENCY = {
   OPERATIONS: {
     DEPOSIT: {
       LABEL: 'Deposit',
-      DESCRIPTION:
-        'Fires three deposit requests at once — like retries after a timeout or a double-click.',
+      DESCRIPTION: 'Fires three deposit requests at once — like retries after a timeout or a double-click.',
     },
     WITHDRAW: {
       LABEL: 'Withdraw',
-      DESCRIPTION:
-        'Fires three withdraw requests at once. Without idempotency, each retry debits the ledger again.',
+      DESCRIPTION: 'Fires three withdraw requests at once. Without idempotency, each retry debits the ledger again.',
     },
     TRANSFER: {
       LABEL: 'Transfer',
-      DESCRIPTION:
-        'Fires three transfers to the same recipient at once. Idempotency keeps only one pair of ledger entries.',
+      DESCRIPTION: 'Fires three transfers to the same recipient at once. Idempotency keeps only one pair of ledger entries.',
     },
   },
   SUMMARY: {
-    DEDUPLICATED: (sent: number, duplicate: number) =>
-      `${sent} requests sent · 1 processed · ${duplicate} deduplicated`,
-    DEDUPLICATED_DETAIL:
-      'Same idempotency key + serial ledger writes: only one entry was applied.',
-    ALL_PROCESSED: (sent: number, processed: number) =>
-      `${sent} requests sent · ${processed} processed · 0 deduplicated`,
-    ALL_PROCESSED_DETAIL:
-      'Without idempotency keys, each retry becomes a separate ledger entry.',
-    WITH_FAILURES: (sent: number, processed: number, failed: number) =>
-      `${sent} requests sent · ${processed} processed · ${failed} failed`,
+    DEDUPLICATED: (sent: number, duplicate: number) => `${sent} requests sent · 1 processed · ${duplicate} deduplicated`,
+    DEDUPLICATED_DETAIL: 'Same idempotency key + serial ledger writes: only one entry was applied.',
+    ALL_PROCESSED: (sent: number, processed: number) => `${sent} requests sent · ${processed} processed · 0 deduplicated`,
+    ALL_PROCESSED_DETAIL: 'Without idempotency keys, each retry becomes a separate ledger entry.',
+    WITH_FAILURES: (sent: number, processed: number, failed: number) => `${sent} requests sent · ${processed} processed · ${failed} failed`,
     WITH_FAILURES_DETAIL: 'Some requests could not be applied to the ledger.',
     DEFAULT: (sent: number) => `${sent} requests sent`,
     DEFAULT_DETAIL: 'Each request was handled independently.',
@@ -144,9 +134,7 @@ export const LEDGER = {
   },
   MESSAGES: {
     APPLIED: 'Applied to the ledger.',
-    DUPLICATE_EARLY:
-      'Idempotent replay — this request matches one already applied to the ledger.',
-    DUPLICATE_RACE:
-      'Idempotent replay — a concurrent duplicate finished first.',
+    DUPLICATE_EARLY: 'Idempotent replay — this request matches one already applied to the ledger.',
+    DUPLICATE_RACE: 'Idempotent replay — a concurrent duplicate finished first.',
   },
 } as const;
