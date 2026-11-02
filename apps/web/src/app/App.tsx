@@ -28,7 +28,9 @@ export function App() {
   const parsedAmount = Number(amount) || CONCURRENCY_DEMO.DEFAULT_AMOUNT;
 
   async function handleRun(withIdempotencyKey: boolean) {
-    if (!userId || running) return;
+    if (!userId || running) {
+      return;
+    }
 
     setRunning(true);
     setEntries([]);

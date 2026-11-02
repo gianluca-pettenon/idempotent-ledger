@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { balanceOf, decideDeposit, decideTransfer, decideWithdraw } from "@api/features/ledger/ledger.domain";
+import { balanceOf, decideDeposit, decideTransfer, decideWithdraw } from "@api/features/ledger/domain/ledger.domain";
 
 const alice = { userId: "alice", balance: 50 };
 const bob = { userId: "bob", balance: 0 };

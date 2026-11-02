@@ -6,7 +6,7 @@ import {
 	StreamNotFoundError,
 	WrongExpectedVersionError,
 } from "@kurrent/kurrentdb-client";
-import { type Account, type AccountEvent, balanceOf } from "@api/features/ledger/ledger.domain";
+import { type Account, type AccountEvent, balanceOf } from "@api/features/ledger/domain/ledger.domain";
 
 export const store = KurrentDBClient.connectionString(Bun.env.KURRENTDB_URL as string);
 
@@ -27,10 +27,14 @@ async function readStream<T>(streamName: string) {
 
 	try {
 		for await (const { event } of store.readStream(streamName)) {
-			if (event) events.push({ ...(event as T), revision: event.revision });
+			if (event) {
+				events.push({ ...(event as T), revision: event.revision });
+			}
 		}
 	} catch (error) {
-		if (!(error instanceof StreamNotFoundError)) throw error;
+		if (!(error instanceof StreamNotFoundError)) {
+			throw error;
+		}
 	}
 
 	return events;
@@ -72,7 +76,9 @@ export async function appendEvents(appends: AccountAppend[], processed?: Process
 		await store.multiStreamAppend(writes);
 		return true;
 	} catch (error) {
-		if (error instanceof WrongExpectedVersionError) return false;
+		if (error instanceof WrongExpectedVersionError) {
+			return false;
+		}
 		throw error;
 	}
 }

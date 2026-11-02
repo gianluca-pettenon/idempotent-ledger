@@ -1,7 +1,7 @@
 import { OperationKind } from "@banking-ledger/shared";
-import { balanceOf, decideDeposit, decideTransfer, decideWithdraw, Outcome } from "@api/features/ledger/ledger.domain";
-import { type AccountAppend, appendEvents, findProcessedRequest, loadAccount } from "@api/features/ledger/ledger.repository";
-import { userExists } from "@api/features/users/users.repository";
+import { balanceOf, decideDeposit, decideTransfer, decideWithdraw, Outcome } from "@api/features/ledger/domain/ledger.domain";
+import { type AccountAppend, appendEvents, findProcessedRequest, loadAccount } from "@api/features/ledger/repositories/ledger.repository";
+import { userExists } from "@api/features/users/repositories/users.repository";
 
 const MAX_ATTEMPTS = 20;
 
@@ -13,7 +13,9 @@ type Decision = { appends: AccountAppend[]; balance: number };
 // in the same atomic append as its effect, so retries replay the first result instead of applying twice.
 async function execute(request: Request, key: string | null, decide: () => Promise<Decision>) {
 	for (const userId of [request.userId, request.toUserId].filter((id) => id !== undefined)) {
-		if (!(await userExists(userId))) throw new Error(`Account not found for user ${userId}`, { cause: 404 });
+		if (!(await userExists(userId))) {
+			throw new Error(`Account not found for user ${userId}`, { cause: 404 });
+		}
 	}
 
 	const requestJson = JSON.stringify(request);
@@ -34,7 +36,9 @@ async function execute(request: Request, key: string | null, decide: () => Promi
 		const { appends, balance } = await decide();
 		const processed = key ? { userId: request.userId, key, request: requestJson, balance } : undefined;
 
-		if (await appendEvents(appends, processed)) return { balance, outcome: Outcome.Processed };
+		if (await appendEvents(appends, processed)) {
+			return { balance, outcome: Outcome.Processed };
+		}
 	}
 
 	throw new Error("Account is under heavy contention, retry later", { cause: 409 });

@@ -1,7 +1,7 @@
 import type { TransactionSQL } from "bun";
 import { type RecordedEvent, START, streamNameFilter } from "@kurrent/kurrentdb-client";
-import { type AccountEvent, AccountEventType, balanceOf } from "@api/features/ledger/ledger.domain";
-import { ACCOUNT_STREAM_PREFIX, store } from "@api/features/ledger/ledger.repository";
+import { type AccountEvent, AccountEventType, balanceOf } from "@api/features/ledger/domain/ledger.domain";
+import { ACCOUNT_STREAM_PREFIX, store } from "@api/features/ledger/repositories/ledger.repository";
 import {
 	findBalance,
 	findCheckpoint,
@@ -9,7 +9,7 @@ import {
 	insertMovement,
 	saveCheckpoint,
 	transaction,
-} from "@api/features/projection/projection.repository";
+} from "@api/features/projection/repositories/projection.repository";
 
 const RECENT_TRANSACTIONS = 20;
 
@@ -30,7 +30,9 @@ const MOVEMENTS: Record<AccountEventType, { type: TransactionType; counterparty?
 async function project(tx: TransactionSQL, event: RecordedEvent) {
 	const accountEvent = { type: event.type, data: event.data } as AccountEvent;
 	const movement = MOVEMENTS[accountEvent.type];
-	if (!movement) return;
+	if (!movement) {
+		return;
+	}
 
 	const data = accountEvent.data as Record<string, string | number>;
 	const row = {
@@ -55,7 +57,9 @@ export async function runProjector() {
 	});
 
 	for await (const { event } of subscription) {
-		if (!event?.position) continue;
+		if (!event?.position) {
+			continue;
+		}
 		const { position } = event;
 
 		await transaction(async (tx) => {
@@ -68,9 +72,13 @@ export async function runProjector() {
 export async function getAccount(userId: string) {
 	const balance = await findBalance(userId);
 
-	if (balance === undefined) throw new Error(`Account not found for user ${userId}`, { cause: 404 });
+	if (balance === undefined) {
+		throw new Error(`Account not found for user ${userId}`, { cause: 404 });
+	}
 
 	return { balance, transactions: await findRecentTransactions(userId, RECENT_TRANSACTIONS) };
 }
 
-if (import.meta.main) await runProjector();
+if (import.meta.main) {
+	await runProjector();
+}

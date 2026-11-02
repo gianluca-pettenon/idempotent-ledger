@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { migrate, sql } from "@api/db/db";
-import { runProjector } from "@api/features/projection/projection.service";
+import { runProjector } from "@api/features/projection/services/projection.service";
 import { app } from "@api/server";
 
 async function post(path: string, body: unknown, idempotencyKey?: string) {
@@ -21,7 +21,9 @@ async function account(userId: string, balance: number) {
 		const response = await app.handle(new Request(`http://localhost/api/accounts/${userId}`));
 		const { data: account } = (await response.json()) as any;
 
-		if (account?.balance === balance) return account;
+		if (account?.balance === balance) {
+			return account;
+		}
 		await Bun.sleep(20);
 	}
 

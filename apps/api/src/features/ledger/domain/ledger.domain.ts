@@ -34,11 +34,15 @@ export function balanceOf(events: AccountEvent[]) {
 }
 
 function assertAmount(amount: number) {
-	if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error("Amount must be a positive integer", { cause: 422 });
+	if (!Number.isSafeInteger(amount) || amount <= 0) {
+		throw new Error("Amount must be a positive integer", { cause: 422 });
+	}
 }
 
 function assertFunds(account: Account, amount: number) {
-	if (account.balance < amount) throw new Error(`Account ${account.userId} has insufficient balance`, { cause: 422 });
+	if (account.balance < amount) {
+		throw new Error(`Account ${account.userId} has insufficient balance`, { cause: 422 });
+	}
 }
 
 export function decideDeposit(amount: number): AccountEvent {
@@ -56,7 +60,11 @@ export function decideWithdraw(account: Account, amount: number): AccountEvent {
 
 export function decideTransfer(from: Account, to: Account, amount: number): [AccountEvent, AccountEvent] {
 	assertAmount(amount);
-	if (from.userId === to.userId) throw new Error("Cannot transfer to the same account", { cause: 422 });
+
+	if (from.userId === to.userId) {
+		throw new Error("Cannot transfer to the same account", { cause: 422 });
+	}
+
 	assertFunds(from, amount);
 
 	const transferId = Bun.randomUUIDv7();

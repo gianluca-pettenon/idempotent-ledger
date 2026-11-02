@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { deposit, transfer, withdraw } from "@api/features/ledger/ledger.service";
+import { deposit, transfer, withdraw } from "@api/features/ledger/services/ledger.service";
 
 export const IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 
