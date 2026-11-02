@@ -5,7 +5,7 @@ import {
 	StreamNotFoundError,
 	WrongExpectedVersionError,
 } from "@kurrent/kurrentdb-client";
-import { type Account, type AccountEvent, balanceOf, LedgerError } from "@api/features/ledger/ledger.domain";
+import { type Account, type AccountEvent, balanceOf } from "@api/features/ledger/ledger.domain";
 
 export const store = KurrentDBClient.connectionString(Bun.env.KURRENTDB_URL as string);
 
@@ -35,7 +35,7 @@ export async function loadAccount(userId: string): Promise<Account & { revision:
 	const events = await readStream<AccountEvent>(accountStream(userId));
 	const last = events.at(-1);
 
-	if (!last) throw new LedgerError(404, `Account not found for user ${userId}`);
+	if (!last) throw new Error(`Account not found for user ${userId}`, { cause: 404 });
 
 	return { userId, revision: last.revision, balance: balanceOf(events) };
 }

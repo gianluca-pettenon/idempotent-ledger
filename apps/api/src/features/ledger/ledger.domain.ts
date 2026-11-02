@@ -1,4 +1,5 @@
 // Pure business rules: no I/O. Each decide* turns a command into the events it produces, or throws.
+// Errors carry their HTTP status in `cause`.
 
 export type AccountEvent =
 	| { type: "AccountOpened"; data: Record<string, never> }
@@ -8,19 +9,6 @@ export type AccountEvent =
 	| { type: "TransferReceived"; data: { transferId: string; fromUserId: string; amount: number } };
 
 export type Account = { userId: string; balance: number };
-
-export class LedgerError extends Error {
-	constructor(
-		public status: number,
-		message: string,
-	) {
-		super(message);
-	}
-
-	toResponse() {
-		return Response.json({ message: this.message }, { status: this.status });
-	}
-}
 
 export function balanceOf(events: AccountEvent[]) {
 	return events.reduce((balance, event) => {
@@ -38,11 +26,11 @@ export function balanceOf(events: AccountEvent[]) {
 }
 
 function assertAmount(amount: number) {
-	if (!Number.isSafeInteger(amount) || amount <= 0) throw new LedgerError(422, "Amount must be a positive integer");
+	if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error("Amount must be a positive integer", { cause: 422 });
 }
 
 function assertFunds(account: Account, amount: number) {
-	if (account.balance < amount) throw new LedgerError(422, `Account ${account.userId} has insufficient balance`);
+	if (account.balance < amount) throw new Error(`Account ${account.userId} has insufficient balance`, { cause: 422 });
 }
 
 export function decideDeposit(amount: number): AccountEvent {
@@ -60,7 +48,7 @@ export function decideWithdraw(account: Account, amount: number): AccountEvent {
 
 export function decideTransfer(from: Account, to: Account, amount: number): [AccountEvent, AccountEvent] {
 	assertAmount(amount);
-	if (from.userId === to.userId) throw new LedgerError(422, "Cannot transfer to the same account");
+	if (from.userId === to.userId) throw new Error("Cannot transfer to the same account", { cause: 422 });
 	assertFunds(from, amount);
 
 	const transferId = Bun.randomUUIDv7();

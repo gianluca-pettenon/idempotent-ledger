@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { balanceOf, decideDeposit, decideTransfer, decideWithdraw, LedgerError } from "@api/features/ledger/ledger.domain";
+import { balanceOf, decideDeposit, decideTransfer, decideWithdraw } from "@api/features/ledger/ledger.domain";
 
 const alice = { userId: "alice", balance: 50 };
 const bob = { userId: "bob", balance: 0 };
@@ -13,7 +13,7 @@ describe("ledger domain", () => {
 	});
 
 	test("rejects invalid amounts, overdrafts and self transfers", () => {
-		for (const amount of [0, -1, 1.5, Number.NaN]) expect(() => decideDeposit(amount)).toThrow(LedgerError);
+		for (const amount of [0, -1, 1.5, Number.NaN]) expect(() => decideDeposit(amount)).toThrow("positive integer");
 		expect(() => decideWithdraw(alice, 51)).toThrow("insufficient balance");
 		expect(() => decideTransfer(alice, alice, 1)).toThrow("same account");
 	});

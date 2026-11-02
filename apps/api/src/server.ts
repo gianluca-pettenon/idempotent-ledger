@@ -9,6 +9,12 @@ import { projectionRoutes } from "@api/features/projection/projection.routes";
 export const app = new Elysia({ prefix: "/api" })
 	.use(cors({ origin: Bun.env.WEB_ORIGIN, allowedHeaders: ["Content-Type", "Idempotency-Key", "X-Request-Id"] }))
 	.use(openapi({ path: "/docs" }))
+	.onError(({ code, error, set }) => {
+		if (code !== "UNKNOWN") return;
+
+		set.status = typeof error.cause === "number" ? error.cause : 500;
+		return { message: error.message };
+	})
 	.use(ledgerRoutes)
 	.use(projectionRoutes);
 

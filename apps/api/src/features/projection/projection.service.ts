@@ -1,6 +1,5 @@
 import type { TransactionSQL } from "bun";
 import { type RecordedEvent, START, streamNameFilter } from "@kurrent/kurrentdb-client";
-import { LedgerError } from "@api/features/ledger/ledger.domain";
 import { store } from "@api/features/ledger/ledger.repository";
 import {
 	findBalance,
@@ -78,7 +77,7 @@ export function listUsers() {
 export async function getAccount(userId: string) {
 	const balance = await findBalance(userId);
 
-	if (balance === undefined) throw new LedgerError(404, `Account not found for user ${userId}`);
+	if (balance === undefined) throw new Error(`Account not found for user ${userId}`, { cause: 404 });
 
 	return { balance, transactions: await findRecentTransactions(userId, RECENT_TRANSACTIONS) };
 }

@@ -1,10 +1,4 @@
-import {
-	balanceOf,
-	decideDeposit,
-	decideTransfer,
-	decideWithdraw,
-	LedgerError,
-} from "@api/features/ledger/ledger.domain";
+import { balanceOf, decideDeposit, decideTransfer, decideWithdraw } from "@api/features/ledger/ledger.domain";
 import {
 	type AccountAppend,
 	appendEvents,
@@ -31,7 +25,7 @@ async function execute(request: Request, key: string | null, decide: () => Promi
 
 			if (previous) {
 				if (previous.request !== requestJson) {
-					throw new LedgerError(409, `Idempotency-Key "${key}" was already used with a different request`);
+					throw new Error(`Idempotency-Key "${key}" was already used with a different request`, { cause: 409 });
 				}
 
 				return { balance: previous.balance, outcome: "duplicate" };
@@ -44,7 +38,7 @@ async function execute(request: Request, key: string | null, decide: () => Promi
 		if (await appendEvents(appends, processed)) return { balance, outcome: "processed" };
 	}
 
-	throw new LedgerError(409, "Account is under heavy contention, retry later");
+	throw new Error("Account is under heavy contention, retry later", { cause: 409 });
 }
 
 export function deposit(userId: string, amount: number, key: string | null) {
