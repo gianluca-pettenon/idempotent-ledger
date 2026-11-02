@@ -92,7 +92,18 @@ export async function findProcessedRequest(accountId: string, key: string) {
 	return event?.data;
 }
 
-// One atomic append across every touched stream. Returns false when another writer got there first.
+export enum AppendResult {
+	Appended = "appended",
+	// Another writer changed an account stream first: re-read and decide again.
+	AccountConflict = "account_conflict",
+	// The idempotency stream already exists: either a concurrent request with the same key, or an expired key.
+	KeyConflict = "key_conflict",
+}
+
+// Clients retry for minutes, not forever: after this the record expires and the key may not be reused.
+const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
+
+// One atomic append across every touched stream.
 export async function appendEvents(appends: AccountAppend[], processed?: ProcessedRequest) {
 	const writes: AppendStreamRequest[] = appends.map(({ accountId, revision, event }) => ({
 		streamName: accountStream(accountId),
@@ -100,11 +111,13 @@ export async function appendEvents(appends: AccountAppend[], processed?: Process
 		events: [jsonEvent(event)],
 	}));
 
-	if (processed) {
-		const { accountId, key, request, response } = processed;
+	const keyStream = processed && idempotencyStream(processed.accountId, processed.key);
+
+	if (processed && keyStream) {
+		const { request, response } = processed;
 
 		writes.push({
-			streamName: idempotencyStream(accountId, key),
+			streamName: keyStream,
 			expectedState: NO_STREAM,
 			events: [jsonEvent({ type: EventType.RequestProcessed, data: { request, response } })],
 		});
@@ -112,11 +125,17 @@ export async function appendEvents(appends: AccountAppend[], processed?: Process
 
 	try {
 		await store.multiStreamAppend(writes);
-		return true;
 	} catch (error) {
 		if (error instanceof WrongExpectedVersionError) {
-			return false;
+			return error.streamName === keyStream ? AppendResult.KeyConflict : AppendResult.AccountConflict;
 		}
 		throw error;
 	}
+
+	if (keyStream) {
+		// A second write: if it fails the money already moved, so the record only misses its expiry.
+		await store.setStreamMetadata(keyStream, { maxAge: IDEMPOTENCY_TTL_SECONDS }).catch(console.error);
+	}
+
+	return AppendResult.Appended;
 }

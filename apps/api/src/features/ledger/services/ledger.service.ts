@@ -7,7 +7,13 @@ import {
 	decideWithdraw,
 	Outcome,
 } from "@api/features/ledger/domain/ledger.domain";
-import { type AccountAppend, appendEvents, findProcessedRequest, loadAccount } from "@api/features/ledger/repositories/ledger.repository";
+import {
+	type AccountAppend,
+	AppendResult,
+	appendEvents,
+	findProcessedRequest,
+	loadAccount,
+} from "@api/features/ledger/repositories/ledger.repository";
 
 const MAX_ATTEMPTS = 20;
 
@@ -21,6 +27,7 @@ type Decision<T> = { appends: AccountAppend[]; response: T };
 
 async function execute<T extends object>(request: Request, key: string | null, decide: () => Promise<Decision<T>>) {
 	const requestJson = JSON.stringify(request);
+	let keyConflict = false;
 
 	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 		if (key) {
@@ -33,22 +40,32 @@ async function execute<T extends object>(request: Request, key: string | null, d
 
 				return { ...(previous.response as T), outcome: Outcome.Duplicate };
 			}
+
+			// The key's stream exists but its record is gone: it outlived its TTL.
+			if (keyConflict) {
+				throw new Error(`Idempotency-Key "${key}" has expired, use a new one`, { cause: 409 });
+			}
 		}
 
 		const { appends, response } = await decide();
 		const processed = key ? { accountId: request.accountId, key, request: requestJson, response } : undefined;
+		const result = await appendEvents(appends, processed);
 
-		if (await appendEvents(appends, processed)) {
+		if (result === AppendResult.Appended) {
 			return { ...response, outcome: Outcome.Processed };
 		}
+
+		keyConflict = result === AppendResult.KeyConflict;
 	}
 
 	throw new Error("Account is under heavy contention, retry later", { cause: 409 });
 }
 
-export function createAccount(ownerName: string, key: string | null) {
-	const accountId = key ? Bun.randomUUIDv5(key, ACCOUNT_ID_NAMESPACE) : Bun.randomUUIDv7();
-
+export function createAccount(
+	ownerName: string,
+	key: string | null,
+	accountId = key ? Bun.randomUUIDv5(key, ACCOUNT_ID_NAMESPACE) : Bun.randomUUIDv7(),
+) {
 	return execute({ accountId, ownerName }, key, async () => {
 		const account = await loadAccount(accountId);
 		const event = decideCreate(account, ownerName);
