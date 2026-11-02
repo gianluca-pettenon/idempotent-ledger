@@ -1,6 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { openAccounts } from "@api/features/ledger/ledger.service";
-import { migrate } from "@api/features/projection/projection.repository";
+import { migrate, sql } from "@api/db/db";
 import { runProjector } from "@api/features/projection/projection.service";
 import { app } from "@api/server";
 
@@ -13,20 +12,24 @@ async function post(path: string, body: unknown, idempotencyKey?: string) {
 		}),
 	);
 
-	return { status: response.status, body: (await response.json()) as any };
+	return { status: response.status, body: ((await response.json()) as any).data };
 }
 
 // The read model is eventually consistent: poll until the projector has applied the events.
 async function account(userId: string, balance: number) {
 	for (let attempt = 0; attempt < 100; attempt++) {
 		const response = await app.handle(new Request(`http://localhost/api/accounts/${userId}`));
-		const { account } = (await response.json()) as any;
+		const { data: account } = (await response.json()) as any;
 
 		if (account?.balance === balance) return account;
 		await Bun.sleep(20);
 	}
 
 	throw new Error(`Read model never reached balance ${balance} for ${userId}`);
+}
+
+async function openAccounts(names: string[]) {
+	return sql<{ id: string; name: string }[]>`INSERT INTO users ${sql(names.map((name) => ({ name })))} RETURNING id, name`;
 }
 
 beforeAll(async () => {
@@ -38,6 +41,13 @@ const deposit = (userId: string, amount: unknown, key?: string) => post(`/accoun
 const withdraw = (userId: string, amount: number) => post(`/accounts/${userId}/withdrawals`, { amount });
 
 describe("ledger", () => {
+	test("migrations seed the default users", async () => {
+		const response = await app.handle(new Request("http://localhost/api/users"));
+		const { data: users } = (await response.json()) as any;
+
+		expect(users.map((user: { name: string }) => user.name)).toEqual(expect.arrayContaining(["User A", "User D"]));
+	});
+
 	test("deposit, withdraw and statement", async () => {
 		const [alice] = await openAccounts(["Alice"]);
 

@@ -2,7 +2,6 @@
 // Errors carry their HTTP status in `cause`.
 
 export type AccountEvent =
-	| { type: "AccountOpened"; data: Record<string, never> }
 	| { type: "MoneyDeposited"; data: { amount: number } }
 	| { type: "MoneyWithdrawn"; data: { amount: number } }
 	| { type: "TransferSent"; data: { transferId: string; toUserId: string; amount: number } }
@@ -19,8 +18,6 @@ export function balanceOf(events: AccountEvent[]) {
 			case "MoneyWithdrawn":
 			case "TransferSent":
 				return balance - event.data.amount;
-			default:
-				return balance;
 		}
 	}, 0);
 }

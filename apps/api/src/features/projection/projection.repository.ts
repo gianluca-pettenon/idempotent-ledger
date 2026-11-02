@@ -1,6 +1,5 @@
-import { SQL, type TransactionSQL } from "bun";
-
-const sql = new SQL(Bun.env.DATABASE_URL as string);
+import type { TransactionSQL } from "bun";
+import { sql } from "@api/db/db";
 
 export type Movement = {
 	id: string;
@@ -11,11 +10,6 @@ export type Movement = {
 	createdAt: Date;
 	position: bigint;
 };
-
-// shortcut: idempotent CREATE IF NOT EXISTS instead of versioned migrations, adopt a migration tool once the schema evolves.
-export async function migrate() {
-	await sql.unsafe(await Bun.file(new URL("./schema.sql", import.meta.url)).text());
-}
 
 export function transaction(work: (tx: TransactionSQL) => Promise<void>) {
 	return sql.begin(work);
@@ -34,16 +28,11 @@ export async function saveCheckpoint(tx: TransactionSQL, position: { commit: big
 	`;
 }
 
-export async function insertUser(tx: TransactionSQL, user: { id: string; name: string }) {
-	await tx`INSERT INTO users (id, name) VALUES (${user.id}, ${user.name})`;
-}
-
-export async function insertAccount(tx: TransactionSQL, userId: string) {
-	await tx`INSERT INTO accounts (user_id) VALUES (${userId})`;
-}
-
 export async function insertMovement(tx: TransactionSQL, movement: Movement, delta: number) {
-	await tx`UPDATE accounts SET balance = balance + ${delta} WHERE user_id = ${movement.userId}`;
+	await tx`
+		INSERT INTO accounts (user_id, balance) VALUES (${movement.userId}, ${delta})
+		ON CONFLICT (user_id) DO UPDATE SET balance = accounts.balance + excluded.balance
+	`;
 	await tx`
 		INSERT INTO transactions (id, user_id, type, amount, counterparty_user_id, created_at, position)
 		VALUES (${movement.id}, ${movement.userId}, ${movement.type}, ${movement.amount},
@@ -51,12 +40,11 @@ export async function insertMovement(tx: TransactionSQL, movement: Movement, del
 	`;
 }
 
-export function findUsers() {
-	return sql`SELECT id, name FROM users ORDER BY name`;
-}
-
+// Undefined when the user does not exist; 0 when it exists but has no movements yet.
 export async function findBalance(userId: string) {
-	const [row] = await sql`SELECT balance FROM accounts WHERE user_id = ${userId}`;
+	const [row] = await sql`
+		SELECT COALESCE(a.balance, 0) AS balance FROM users u LEFT JOIN accounts a ON a.user_id = u.id WHERE u.id = ${userId}
+	`;
 
 	return row && Number(row.balance);
 }

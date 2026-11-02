@@ -9,7 +9,9 @@ import { type Account, type AccountEvent, balanceOf } from "@api/features/ledger
 
 export const store = KurrentDBClient.connectionString(Bun.env.KURRENTDB_URL as string);
 
-export type AccountAppend = { userId: string; revision: bigint; event: AccountEvent };
+type Revision = bigint | "no_stream";
+
+export type AccountAppend = { userId: string; revision: Revision; event: AccountEvent };
 
 export type ProcessedRequest = { userId: string; key: string; request: string; balance: number };
 
@@ -30,14 +32,12 @@ async function readStream<T>(streamName: string) {
 	return events;
 }
 
+// An account with no events yet is an empty stream: balance 0, appended to as "no_stream".
 // shortcut: replays the whole stream on every command, add snapshots once accounts hold thousands of events.
-export async function loadAccount(userId: string): Promise<Account & { revision: bigint }> {
+export async function loadAccount(userId: string): Promise<Account & { revision: Revision }> {
 	const events = await readStream<AccountEvent>(accountStream(userId));
-	const last = events.at(-1);
 
-	if (!last) throw new Error(`Account not found for user ${userId}`, { cause: 404 });
-
-	return { userId, revision: last.revision, balance: balanceOf(events) };
+	return { userId, revision: events.at(-1)?.revision ?? "no_stream", balance: balanceOf(events) };
 }
 
 export async function findProcessedRequest(userId: string, key: string) {
@@ -66,27 +66,6 @@ export async function appendEvents(appends: AccountAppend[], processed?: Process
 
 	try {
 		await store.multiStreamAppend(writes);
-		return true;
-	} catch (error) {
-		if (error instanceof WrongExpectedVersionError) return false;
-		throw error;
-	}
-}
-
-export async function registerUsers(users: { id: string; name: string }[], usersState: "any" | "no_stream") {
-	try {
-		await store.multiStreamAppend([
-			{
-				streamName: "users",
-				expectedState: usersState,
-				events: users.map((user) => jsonEvent({ type: "UserRegistered", data: user })),
-			},
-			...users.map((user) => ({
-				streamName: accountStream(user.id),
-				expectedState: "no_stream" as const,
-				events: [jsonEvent({ type: "AccountOpened", data: {} })],
-			})),
-		]);
 		return true;
 	} catch (error) {
 		if (error instanceof WrongExpectedVersionError) return false;

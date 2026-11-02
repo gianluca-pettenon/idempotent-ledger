@@ -5,11 +5,7 @@ import {
 	findBalance,
 	findCheckpoint,
 	findRecentTransactions,
-	findUsers,
-	insertAccount,
 	insertMovement,
-	insertUser,
-	migrate,
 	saveCheckpoint,
 	transaction,
 } from "@api/features/projection/projection.repository";
@@ -25,13 +21,7 @@ const MOVEMENTS: Record<string, { type: string; sign: 1 | -1; counterparty?: "to
 
 async function project(tx: TransactionSQL, event: RecordedEvent) {
 	const data = event.data as Record<string, string | number>;
-
-	if (event.type === "UserRegistered") return insertUser(tx, data as { id: string; name: string });
-
 	const userId = event.streamId.slice("account-".length);
-
-	if (event.type === "AccountOpened") return insertAccount(tx, userId);
-
 	const movement = MOVEMENTS[event.type];
 	if (!movement) return;
 
@@ -52,11 +42,9 @@ async function project(tx: TransactionSQL, event: RecordedEvent) {
 // Catch-up subscription on $all. The checkpoint is saved in the same SQL transaction as the
 // projection, so a crash never applies an event twice nor skips one.
 export async function runProjector() {
-	await migrate();
-
 	const subscription = store.subscribeToAll({
 		fromPosition: (await findCheckpoint()) ?? START,
-		filter: streamNameFilter({ prefixes: ["users", "account-"] }),
+		filter: streamNameFilter({ prefixes: ["account-"] }),
 	});
 
 	for await (const { event } of subscription) {
@@ -68,10 +56,6 @@ export async function runProjector() {
 			await saveCheckpoint(tx, position);
 		});
 	}
-}
-
-export function listUsers() {
-	return findUsers();
 }
 
 export async function getAccount(userId: string) {

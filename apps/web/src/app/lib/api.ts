@@ -6,12 +6,8 @@ type RequestOptions = RequestInit & {
   headers?: HeadersInit;
 };
 
-type AccountResponse = {
-  account: Account;
-};
-
-type TransactionResponse = {
-  outcome: string;
+type ApiResponse<T> = {
+  data: T;
 };
 
 type RunRequestParams = {
@@ -92,7 +88,7 @@ async function runRequest(
   let detail: string | undefined;
 
   try {
-    const response = await request<TransactionResponse>(path, {
+    const response = await request<ApiResponse<{ outcome: string }>>(path, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -102,7 +98,7 @@ async function runRequest(
       body: JSON.stringify(body),
     });
 
-    outcome = response.outcome;
+    outcome = response.data.outcome;
   } catch (error) {
     detail = error instanceof Error ? error.message : undefined;
   }
@@ -116,13 +112,15 @@ async function runRequest(
 }
 
 export async function fetchUsers() {
-  return request<{ users: User[] }>('/users');
+  const { data } = await request<ApiResponse<User[]>>('/users');
+
+  return { users: data };
 }
 
 export async function fetchAccount(userId: string) {
-  const { account } = await request<AccountResponse>(`/accounts/${userId}`);
+  const { data } = await request<ApiResponse<Account>>(`/accounts/${userId}`);
 
-  return { account };
+  return { account: data };
 }
 
 export async function runConcurrentRequests(params: RunRequestParams) {

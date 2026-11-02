@@ -1,13 +1,7 @@
 import { balanceOf, decideDeposit, decideTransfer, decideWithdraw } from "@api/features/ledger/ledger.domain";
-import {
-	type AccountAppend,
-	appendEvents,
-	findProcessedRequest,
-	loadAccount,
-	registerUsers,
-} from "@api/features/ledger/ledger.repository";
+import { type AccountAppend, appendEvents, findProcessedRequest, loadAccount } from "@api/features/ledger/ledger.repository";
+import { userExists } from "@api/features/users/users.repository";
 
-const DEFAULT_USERS = ["User A", "User B", "User C", "User D"];
 const MAX_ATTEMPTS = 20;
 
 type Request = { type: string; userId: string; toUserId?: string; amount: number };
@@ -17,6 +11,10 @@ type Decision = { appends: AccountAppend[]; balance: number };
 // Read, decide, append; retry on optimistic-concurrency conflicts. With a key, the request is recorded
 // in the same atomic append as its effect, so retries replay the first result instead of applying twice.
 async function execute(request: Request, key: string | null, decide: () => Promise<Decision>) {
+	for (const userId of [request.userId, request.toUserId].filter((id) => id !== undefined)) {
+		if (!(await userExists(userId))) throw new Error(`Account not found for user ${userId}`, { cause: 404 });
+	}
+
 	const requestJson = JSON.stringify(request);
 
 	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -72,19 +70,4 @@ export function transfer(fromUserId: string, toUserId: string, amount: number, k
 			balance: from.balance + balanceOf([sent]),
 		};
 	});
-}
-
-export async function openAccounts(names: string[]) {
-	const users = names.map((name) => ({ id: Bun.randomUUIDv7(), name }));
-	await registerUsers(users, "any");
-
-	return users;
-}
-
-// Seeds once: a second start finds the users stream and the append is rejected.
-export function seedDefaultUsers() {
-	return registerUsers(
-		DEFAULT_USERS.map((name) => ({ id: Bun.randomUUIDv7(), name })),
-		"no_stream",
-	);
 }

@@ -1,10 +1,9 @@
 import { openapi } from "@elysia/openapi";
 import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
-import { seedDefaultUsers } from "@api/features/ledger/ledger.service";
 import { ledgerRoutes } from "@api/features/ledger/ledger.routes";
-import { migrate } from "@api/features/projection/projection.repository";
 import { projectionRoutes } from "@api/features/projection/projection.routes";
+import { usersRoutes } from "@api/features/users/users.routes";
 
 export const app = new Elysia({ prefix: "/api" })
 	.use(cors({ origin: Bun.env.WEB_ORIGIN, allowedHeaders: ["Content-Type", "Idempotency-Key", "X-Request-Id"] }))
@@ -15,11 +14,11 @@ export const app = new Elysia({ prefix: "/api" })
 		set.status = typeof error.cause === "number" ? error.cause : 500;
 		return { message: error.message };
 	})
+	.use(usersRoutes)
 	.use(ledgerRoutes)
 	.use(projectionRoutes);
 
 if (import.meta.main) {
-	await Promise.all([migrate(), seedDefaultUsers()]);
 	app.listen(Number(Bun.env.API_PORT));
 	console.log(`API ready at http://localhost:${Bun.env.API_PORT}`);
 }
