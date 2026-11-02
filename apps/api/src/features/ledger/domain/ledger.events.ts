@@ -4,13 +4,11 @@ export enum EventType {
 	MoneyWithdrawn = "MoneyWithdrawn",
 	TransferSent = "TransferSent",
 	TransferReceived = "TransferReceived",
-	AccountSnapshot = "AccountSnapshot",
 	RequestProcessed = "RequestProcessed",
 }
 
 export enum StreamPrefix {
 	Account = "Account-",
-	Snapshot = "Snapshot-Account-",
 	Idempotency = "Idempotency-",
 }
 

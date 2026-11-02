@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import { createAccount } from "@api/features/ledger/services/ledger.service";
 import { findCheckpoint } from "@api/features/projection/repositories/projection.repository";
 import { balancesProjector } from "@api/features/projection/services/balances.projector";
 import { ProjectorName, runProjector } from "@api/features/projection/services/projection.service";
@@ -46,9 +47,10 @@ const account = (accountId: string, balance: number, lines?: number) =>
 	);
 
 async function openAccount(ownerName: string) {
-	const { body } = await post("/accounts", { ownerName });
+	const accountId = Bun.randomUUIDv7();
+	await createAccount(accountId, ownerName);
 
-	return body.accountId as string;
+	return accountId;
 }
 
 beforeAll(() => {
@@ -73,12 +75,9 @@ describe("ledger", () => {
 	});
 
 	test("a new account starts at zero in the read model", async () => {
-		const result = await post("/accounts", { ownerName: "Zero" });
+		const zero = await openAccount("Zero");
 
-		expect(result.status).toBe(201);
-		expect(result.body).toMatchObject({ balance: 0, outcome: "processed" });
-		expect((await account(result.body.accountId, 0, 0)).transactions).toEqual([]);
-		expect((await post("/accounts", { ownerName: " " })).status).toBe(422);
+		expect((await account(zero, 0, 0)).transactions).toEqual([]);
 	});
 
 	test("deposit, withdraw and statement", async () => {

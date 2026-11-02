@@ -35,17 +35,7 @@ Idempotency-{accountId}-{key}
 balance = Σ MoneyDeposited + Σ TransferReceived − Σ MoneyWithdrawn − Σ TransferSent
 ```
 
-### Snapshots
-
-Commands rebuild the account from the event store, never from MongoDB, so a lagging read model can never let a withdrawal or transfer through without funds. To keep that cheap, the account's state is snapshotted:
-
-```text
-Snapshot-Account-{accountId}   AccountSnapshot { balance, revision }   (stream keeps only the latest)
-
-load = latest snapshot + events of Account-{accountId} after its revision
-```
-
-Whenever a load replays `SNAPSHOT_EVERY` (100) events or more, it saves the state it just folded. A snapshot is a cache of immutable history: any reader may write one, it needs no lock, and deleting it only makes the next load slower. The `Snapshot-` prefix keeps it out of the projectors' `Account-*` filter.
+Commands rebuild the account from the event store, never from MongoDB, so a lagging read model can never let a withdrawal or transfer through without funds.
 
 Corrections are new events, never edits. Commands always decide on the stream itself, never on MongoDB, so the invariants (no overdraft, no movement on an unknown account) hold even when the read model lags.
 
@@ -86,9 +76,8 @@ POST /transfers   Idempotency-Key: K
 - **Atomic transfers**: both legs and the idempotency record commit together or not at all (`multiStreamAppend`, KurrentDB 25.1+).
 - **Idempotency** is a stream that can be created only once. Two concurrent requests with the same key race on `no_stream`; the loser retries, finds the record and replays it.
 - **Idempotency lives in the event store** because it is written in the same atomic append as the money. A key kept in Redis or the read model would be a dual write: a crash between the two either loses the key (the retry moves money twice) or keeps a key for an append that never happened.
-- **Idempotency records expire** after 24 hours (`$maxAge` on each `Idempotency-*` stream): clients retry for minutes, not forever. Reusing an expired key is a 409 instead of a second movement, because its stream still exists while its record is gone.
 
-Opening an account with an `Idempotency-Key` derives the account id from the key (UUIDv5), so a retried create lands on the same stream and collapses into one account. The seed needs no key: it uses fixed ids, and a rerun is refused by the domain (account already exists).
+Accounts are opened only by the seed, with fixed ids: a rerun is refused by the domain (account already exists), so it is safe.
 
 The idempotency scope is `(account, key)`, and the stored request includes the operation, so reusing a key for a different payload is a 409.
 
@@ -102,9 +91,9 @@ apps/api/src/
     ledger/                        write side (KurrentDB)
       domain/ledger.events.ts               every event type and stream prefix in KurrentDB (enums)
       domain/ledger.domain.ts               rules only: event payloads, fold, decide* (no I/O)
-      repositories/ledger.repository.ts     KurrentDB reads, snapshots and atomic appends
+      repositories/ledger.repository.ts     KurrentDB reads and atomic appends
       services/ledger.service.ts            commands: read, decide, append, retry, idempotency
-      routes/ledger.routes.ts               POST /accounts, /accounts/:id/deposits, /withdrawals, /transfers
+      routes/ledger.routes.ts               POST /accounts/:id/deposits, /withdrawals, /transfers
     projection/                    read side (MongoDB)
       repositories/projection.repository.ts every MongoDB query
       services/projection.service.ts        projector runner (subscription + checkpoint) and queries
@@ -115,13 +104,12 @@ apps/api/src/
 apps/api/tests/                    mirrors src/
   features/ledger/
     domain/ledger.domain.test.ts            unit tests of the rules, no database
-    repositories/ledger.repository.test.ts  rehydration from a snapshot, idempotency expiry
     ledger.test.ts                          end-to-end tests against real KurrentDB and MongoDB
 ```
 
 Each layer only talks to the one below it: routes → service → domain and repository. Rules never touch I/O, and queries never hold a rule.
 
-Validation lives in the domain, not in the routes: the amount must be a positive integer, the owner name is required, and unknown accounts are a 404. Every endpoint answers `{ data }`. Errors are plain `new Error(message, { cause: status })`; one `onError` turns them into `{ message }` with that status.
+Validation lives in the domain, not in the routes: the amount must be a positive integer, and unknown accounts are a 404. Every endpoint answers `{ data }`. Errors are plain `new Error(message, { cause: status })`; one `onError` turns them into `{ message }` with that status.
 
 ## Getting started
 
@@ -150,14 +138,13 @@ Web on `localhost:3000`, API on `localhost:3001` (OpenAPI at `/api/docs`), Kurre
 ```text
 covered
   atomic, append-only writes across accounts
-  idempotent effect per (account, key), for 24 hours
+  idempotent effect per (account, key)
   optimistic concurrency without lost updates
   full audit trail: the stream is the history
-  bounded rehydration: at most SNAPSHOT_EVERY events replayed per command
   effectively-once projection into MongoDB (idempotent writes + checkpoint)
 
 not covered
-  snapshot schema versioning (change the fold -> delete the snapshot streams)
+  snapshots (every command replays the whole account stream), idempotency-record expiry, input validation beyond the amount
   read-your-writes on queries, currencies/FX, authentication
   external payment rails, HA/DR, more than one instance of the same projector (persistent subscriptions would partition by account)
 ```

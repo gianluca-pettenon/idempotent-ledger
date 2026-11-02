@@ -1,10 +1,5 @@
 import { EventType, type MovementType } from "@api/features/ledger/domain/ledger.events";
 
-export enum Outcome {
-	Processed = "processed",
-	Duplicate = "duplicate",
-}
-
 type Movement = { accountId: string; amount: number };
 type TransferMovement = Movement & { transferId: string; counterpartyAccountId: string };
 
@@ -51,15 +46,11 @@ function assertFunds(account: Account, amount: number) {
 }
 
 export function decideCreate(account: Account, ownerName: string): AccountEvent {
-	if (typeof ownerName !== "string" || !ownerName.trim()) {
-		throw new Error("Owner name is required", { cause: 422 });
-	}
-
 	if (account.opened) {
 		throw new Error(`Account ${account.accountId} already exists`, { cause: 409 });
 	}
 
-	return { type: EventType.AccountCreated, data: { accountId: account.accountId, ownerName: ownerName.trim() } };
+	return { type: EventType.AccountCreated, data: { accountId: account.accountId, ownerName } };
 }
 
 export function decideDeposit(account: Account, amount: number): AccountEvent {
@@ -77,7 +68,7 @@ export function decideWithdraw(account: Account, amount: number): AccountEvent {
 	return { type: EventType.MoneyWithdrawn, data: { accountId: account.accountId, amount } };
 }
 
-export function decideTransfer(from: Account, to: Account, amount: number): [AccountEvent, AccountEvent] {
+export function decideTransfer(from: Account, to: Account, amount: number, transferId: string): [AccountEvent, AccountEvent] {
 	assertOpened(from);
 	assertOpened(to);
 	assertAmount(amount);
@@ -87,8 +78,6 @@ export function decideTransfer(from: Account, to: Account, amount: number): [Acc
 	}
 
 	assertFunds(from, amount);
-
-	const transferId = Bun.randomUUIDv7();
 
 	return [
 		{

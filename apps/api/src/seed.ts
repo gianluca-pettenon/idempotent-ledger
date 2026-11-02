@@ -10,7 +10,7 @@ const SEED_NAMESPACE = "3c9e7f1a-5b2d-4e8f-a6c0-9d1b4f7e2a53";
 export function seed() {
 	return Promise.all(
 		DEFAULT_ACCOUNTS.map((ownerName) =>
-			createAccount(ownerName, null, Bun.randomUUIDv5(ownerName, SEED_NAMESPACE)).catch((error) => {
+			createAccount(Bun.randomUUIDv5(ownerName, SEED_NAMESPACE), ownerName).catch((error) => {
 				if (error.cause !== 409) {
 					throw error;
 				}
