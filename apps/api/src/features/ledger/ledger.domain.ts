@@ -1,25 +1,36 @@
 // Pure business rules: no I/O. Each decide* turns a command into the events it produces, or throws.
 // Errors carry their HTTP status in `cause`.
 
+export enum AccountEventType {
+	MoneyDeposited = "MoneyDeposited",
+	MoneyWithdrawn = "MoneyWithdrawn",
+	TransferSent = "TransferSent",
+	TransferReceived = "TransferReceived",
+}
+
+export enum Outcome {
+	Processed = "processed",
+	Duplicate = "duplicate",
+}
+
 export type AccountEvent =
-	| { type: "MoneyDeposited"; data: { amount: number } }
-	| { type: "MoneyWithdrawn"; data: { amount: number } }
-	| { type: "TransferSent"; data: { transferId: string; toUserId: string; amount: number } }
-	| { type: "TransferReceived"; data: { transferId: string; fromUserId: string; amount: number } };
+	| { type: AccountEventType.MoneyDeposited; data: { amount: number } }
+	| { type: AccountEventType.MoneyWithdrawn; data: { amount: number } }
+	| { type: AccountEventType.TransferSent; data: { transferId: string; toUserId: string; amount: number } }
+	| { type: AccountEventType.TransferReceived; data: { transferId: string; fromUserId: string; amount: number } };
 
 export type Account = { userId: string; balance: number };
 
+// How each event moves the balance. Typed over every event type, so a new event without a sign won't compile.
+const SIGN: Record<AccountEventType, 1 | -1> = {
+	[AccountEventType.MoneyDeposited]: 1,
+	[AccountEventType.TransferReceived]: 1,
+	[AccountEventType.MoneyWithdrawn]: -1,
+	[AccountEventType.TransferSent]: -1,
+};
+
 export function balanceOf(events: AccountEvent[]) {
-	return events.reduce((balance, event) => {
-		switch (event.type) {
-			case "MoneyDeposited":
-			case "TransferReceived":
-				return balance + event.data.amount;
-			case "MoneyWithdrawn":
-			case "TransferSent":
-				return balance - event.data.amount;
-		}
-	}, 0);
+	return events.reduce((balance, event) => balance + SIGN[event.type] * event.data.amount, 0);
 }
 
 function assertAmount(amount: number) {
@@ -33,14 +44,14 @@ function assertFunds(account: Account, amount: number) {
 export function decideDeposit(amount: number): AccountEvent {
 	assertAmount(amount);
 
-	return { type: "MoneyDeposited", data: { amount } };
+	return { type: AccountEventType.MoneyDeposited, data: { amount } };
 }
 
 export function decideWithdraw(account: Account, amount: number): AccountEvent {
 	assertAmount(amount);
 	assertFunds(account, amount);
 
-	return { type: "MoneyWithdrawn", data: { amount } };
+	return { type: AccountEventType.MoneyWithdrawn, data: { amount } };
 }
 
 export function decideTransfer(from: Account, to: Account, amount: number): [AccountEvent, AccountEvent] {
@@ -51,7 +62,7 @@ export function decideTransfer(from: Account, to: Account, amount: number): [Acc
 	const transferId = Bun.randomUUIDv7();
 
 	return [
-		{ type: "TransferSent", data: { transferId, toUserId: to.userId, amount } },
-		{ type: "TransferReceived", data: { transferId, fromUserId: from.userId, amount } },
+		{ type: AccountEventType.TransferSent, data: { transferId, toUserId: to.userId, amount } },
+		{ type: AccountEventType.TransferReceived, data: { transferId, fromUserId: from.userId, amount } },
 	];
 }

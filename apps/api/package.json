@@ -3,6 +3,7 @@
 	"private": true,
 	"type": "module",
 	"dependencies": {
+		"@banking-ledger/shared": "workspace:*",
 		"@elysia/openapi": "^1.4.16",
 		"@elysiajs/cors": "^1.4.2",
 		"@kurrent/kurrentdb-client": "1.3.1",
@@ -12,7 +13,7 @@
 	"scripts": {
 		"dev": "bun --hot run src/server.ts",
 		"start": "bun run src/server.ts",
-		"test": "bun test src"
+		"test": "bun test tests"
 	},
 	"devDependencies": {
 		"drizzle-kit": "^0.31.4"

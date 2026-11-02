@@ -2,6 +2,7 @@ import {
 	type AppendStreamRequest,
 	jsonEvent,
 	KurrentDBClient,
+	NO_STREAM,
 	StreamNotFoundError,
 	WrongExpectedVersionError,
 } from "@kurrent/kurrentdb-client";
@@ -9,13 +10,16 @@ import { type Account, type AccountEvent, balanceOf } from "@api/features/ledger
 
 export const store = KurrentDBClient.connectionString(Bun.env.KURRENTDB_URL as string);
 
-type Revision = bigint | "no_stream";
+type Revision = bigint | typeof NO_STREAM;
 
 export type AccountAppend = { userId: string; revision: Revision; event: AccountEvent };
 
 export type ProcessedRequest = { userId: string; key: string; request: string; balance: number };
 
-const accountStream = (userId: string) => `account-${userId}`;
+export const ACCOUNT_STREAM_PREFIX = "account-";
+const REQUEST_PROCESSED = "RequestProcessed";
+
+const accountStream = (userId: string) => `${ACCOUNT_STREAM_PREFIX}${userId}`;
 const idempotencyStream = (userId: string, key: string) => `idempotency-${userId}-${key}`;
 
 async function readStream<T>(streamName: string) {
@@ -32,12 +36,12 @@ async function readStream<T>(streamName: string) {
 	return events;
 }
 
-// An account with no events yet is an empty stream: balance 0, appended to as "no_stream".
+// An account with no events yet is an empty stream: balance 0, appended to as NO_STREAM.
 // shortcut: replays the whole stream on every command, add snapshots once accounts hold thousands of events.
 export async function loadAccount(userId: string): Promise<Account & { revision: Revision }> {
 	const events = await readStream<AccountEvent>(accountStream(userId));
 
-	return { userId, revision: events.at(-1)?.revision ?? "no_stream", balance: balanceOf(events) };
+	return { userId, revision: events.at(-1)?.revision ?? NO_STREAM, balance: balanceOf(events) };
 }
 
 export async function findProcessedRequest(userId: string, key: string) {
@@ -59,8 +63,8 @@ export async function appendEvents(appends: AccountAppend[], processed?: Process
 
 		writes.push({
 			streamName: idempotencyStream(userId, key),
-			expectedState: "no_stream",
-			events: [jsonEvent({ type: "RequestProcessed", data: { request, balance } })],
+			expectedState: NO_STREAM,
+			events: [jsonEvent({ type: REQUEST_PROCESSED, data: { request, balance } })],
 		});
 	}
 

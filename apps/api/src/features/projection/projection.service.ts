@@ -1,6 +1,7 @@
 import type { TransactionSQL } from "bun";
 import { type RecordedEvent, START, streamNameFilter } from "@kurrent/kurrentdb-client";
-import { store } from "@api/features/ledger/ledger.repository";
+import { type AccountEvent, AccountEventType, balanceOf } from "@api/features/ledger/ledger.domain";
+import { ACCOUNT_STREAM_PREFIX, store } from "@api/features/ledger/ledger.repository";
 import {
 	findBalance,
 	findCheckpoint,
@@ -12,31 +13,37 @@ import {
 
 const RECENT_TRANSACTIONS = 20;
 
-const MOVEMENTS: Record<string, { type: string; sign: 1 | -1; counterparty?: "toUserId" | "fromUserId" }> = {
-	MoneyDeposited: { type: "deposit", sign: 1 },
-	MoneyWithdrawn: { type: "withdraw", sign: -1 },
-	TransferSent: { type: "transfer_out", sign: -1, counterparty: "toUserId" },
-	TransferReceived: { type: "transfer_in", sign: 1, counterparty: "fromUserId" },
+export enum TransactionType {
+	Deposit = "deposit",
+	Withdraw = "withdraw",
+	TransferOut = "transfer_out",
+	TransferIn = "transfer_in",
+}
+
+const MOVEMENTS: Record<AccountEventType, { type: TransactionType; counterparty?: "toUserId" | "fromUserId" }> = {
+	[AccountEventType.MoneyDeposited]: { type: TransactionType.Deposit },
+	[AccountEventType.MoneyWithdrawn]: { type: TransactionType.Withdraw },
+	[AccountEventType.TransferSent]: { type: TransactionType.TransferOut, counterparty: "toUserId" },
+	[AccountEventType.TransferReceived]: { type: TransactionType.TransferIn, counterparty: "fromUserId" },
 };
 
 async function project(tx: TransactionSQL, event: RecordedEvent) {
-	const data = event.data as Record<string, string | number>;
-	const userId = event.streamId.slice("account-".length);
-	const movement = MOVEMENTS[event.type];
+	const accountEvent = { type: event.type, data: event.data } as AccountEvent;
+	const movement = MOVEMENTS[accountEvent.type];
 	if (!movement) return;
 
-	const amount = Number(data.amount);
+	const data = accountEvent.data as Record<string, string | number>;
 	const row = {
 		id: event.id,
-		userId,
+		userId: event.streamId.slice(ACCOUNT_STREAM_PREFIX.length),
 		type: movement.type,
-		amount,
+		amount: accountEvent.data.amount,
 		counterpartyUserId: movement.counterparty ? String(data[movement.counterparty]) : null,
 		createdAt: event.created,
 		position: event.position?.commit ?? 0n,
 	};
 
-	return insertMovement(tx, row, movement.sign * amount);
+	return insertMovement(tx, row, balanceOf([accountEvent]));
 }
 
 // Catch-up subscription on $all. The checkpoint is saved in the same SQL transaction as the
@@ -44,7 +51,7 @@ async function project(tx: TransactionSQL, event: RecordedEvent) {
 export async function runProjector() {
 	const subscription = store.subscribeToAll({
 		fromPosition: (await findCheckpoint()) ?? START,
-		filter: streamNameFilter({ prefixes: ["account-"] }),
+		filter: streamNameFilter({ prefixes: [ACCOUNT_STREAM_PREFIX] }),
 	});
 
 	for await (const { event } of subscription) {

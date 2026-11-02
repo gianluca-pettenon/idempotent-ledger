@@ -81,12 +81,15 @@ apps/api/src/
       ledger.repository.ts     KurrentDB reads and atomic appends
       ledger.service.ts        commands: read, decide, append, retry, idempotency
       ledger.routes.ts         POST /accounts/:id/deposits, /withdrawals, /transfers
-      ledger.domain.test.ts    unit tests of the rules, no database
-      ledger.test.ts           end-to-end tests against real KurrentDB and Postgres
     projection/                read side (Postgres)
       projection.repository.ts every SQL statement
       projection.service.ts    projector (event -> rows) and queries
       projection.routes.ts     GET /accounts/:id
+
+apps/api/tests/                mirrors src/
+  features/ledger/
+    ledger.domain.test.ts      unit tests of the rules, no database
+    ledger.test.ts             end-to-end tests against real KurrentDB and Postgres
 ```
 
 Each layer only talks to the one below it: routes → service → domain and repository. Rules never touch I/O, and SQL never holds a rule.
