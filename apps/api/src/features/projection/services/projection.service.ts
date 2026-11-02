@@ -1,6 +1,7 @@
 import { type RecordedEvent, START, streamNameFilter } from "@kurrent/kurrentdb-client";
-import { type AccountEvent, AccountEventType, delta } from "@api/features/ledger/domain/ledger.domain";
-import { ACCOUNT_STREAM_PREFIX, store } from "@api/features/ledger/repositories/ledger.repository";
+import { type AccountEvent, delta } from "@api/features/ledger/domain/ledger.domain";
+import { EventType, type MovementType, StreamPrefix } from "@api/features/ledger/domain/ledger.events";
+import { store } from "@api/features/ledger/repositories/ledger.repository";
 import {
 	applyMovement,
 	createIndexes,
@@ -22,11 +23,11 @@ export enum TransactionType {
 	TransferIn = "transfer_in",
 }
 
-const TRANSACTION_TYPES: Record<Exclude<AccountEventType, AccountEventType.AccountCreated>, TransactionType> = {
-	[AccountEventType.MoneyDeposited]: TransactionType.Deposit,
-	[AccountEventType.MoneyWithdrawn]: TransactionType.Withdraw,
-	[AccountEventType.TransferSent]: TransactionType.TransferOut,
-	[AccountEventType.TransferReceived]: TransactionType.TransferIn,
+const TRANSACTION_TYPES: Record<MovementType, TransactionType> = {
+	[EventType.MoneyDeposited]: TransactionType.Deposit,
+	[EventType.MoneyWithdrawn]: TransactionType.Withdraw,
+	[EventType.TransferSent]: TransactionType.TransferOut,
+	[EventType.TransferReceived]: TransactionType.TransferIn,
 };
 
 // The read model adds what the event does not carry: the balance, and the counterparty's name.
@@ -34,7 +35,7 @@ async function project(event: RecordedEvent) {
 	const accountEvent = { type: event.type, data: event.data } as AccountEvent;
 	const version = Number(event.revision);
 
-	if (accountEvent.type === AccountEventType.AccountCreated) {
+	if (accountEvent.type === EventType.AccountCreated) {
 		const { accountId, ownerName } = accountEvent.data;
 
 		return insertAccount({ _id: accountId, ownerName, balance: 0, version });
@@ -65,7 +66,7 @@ export async function runProjector() {
 
 	const subscription = store.subscribeToAll({
 		fromPosition: (await findCheckpoint()) ?? START,
-		filter: streamNameFilter({ prefixes: [ACCOUNT_STREAM_PREFIX] }),
+		filter: streamNameFilter({ prefixes: [StreamPrefix.Account] }),
 	});
 
 	for await (const { event } of subscription) {

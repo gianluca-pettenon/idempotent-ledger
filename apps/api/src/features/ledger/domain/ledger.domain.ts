@@ -1,10 +1,4 @@
-export enum AccountEventType {
-	AccountCreated = "AccountCreated",
-	MoneyDeposited = "MoneyDeposited",
-	MoneyWithdrawn = "MoneyWithdrawn",
-	TransferSent = "TransferSent",
-	TransferReceived = "TransferReceived",
-}
+import { EventType, type MovementType } from "@api/features/ledger/domain/ledger.events";
 
 export enum Outcome {
 	Processed = "processed",
@@ -15,23 +9,23 @@ type Movement = { accountId: string; amount: number };
 type TransferMovement = Movement & { transferId: string; counterpartyAccountId: string };
 
 export type AccountEvent =
-	| { type: AccountEventType.AccountCreated; data: { accountId: string; ownerName: string } }
-	| { type: AccountEventType.MoneyDeposited; data: Movement }
-	| { type: AccountEventType.MoneyWithdrawn; data: Movement }
-	| { type: AccountEventType.TransferSent; data: TransferMovement }
-	| { type: AccountEventType.TransferReceived; data: TransferMovement };
+	| { type: EventType.AccountCreated; data: { accountId: string; ownerName: string } }
+	| { type: EventType.MoneyDeposited; data: Movement }
+	| { type: EventType.MoneyWithdrawn; data: Movement }
+	| { type: EventType.TransferSent; data: TransferMovement }
+	| { type: EventType.TransferReceived; data: TransferMovement };
 
 export type Account = { accountId: string; opened: boolean; balance: number };
 
-const SIGN: Record<Exclude<AccountEventType, AccountEventType.AccountCreated>, 1 | -1> = {
-	[AccountEventType.MoneyDeposited]: 1,
-	[AccountEventType.TransferReceived]: 1,
-	[AccountEventType.MoneyWithdrawn]: -1,
-	[AccountEventType.TransferSent]: -1,
+const SIGN: Record<MovementType, 1 | -1> = {
+	[EventType.MoneyDeposited]: 1,
+	[EventType.TransferReceived]: 1,
+	[EventType.MoneyWithdrawn]: -1,
+	[EventType.TransferSent]: -1,
 };
 
 export function delta(event: AccountEvent) {
-	return event.type === AccountEventType.AccountCreated ? 0 : SIGN[event.type] * event.data.amount;
+	return event.type === EventType.AccountCreated ? 0 : SIGN[event.type] * event.data.amount;
 }
 
 export function balanceOf(events: AccountEvent[]) {
@@ -65,14 +59,14 @@ export function decideCreate(account: Account, ownerName: string): AccountEvent 
 		throw new Error(`Account ${account.accountId} already exists`, { cause: 409 });
 	}
 
-	return { type: AccountEventType.AccountCreated, data: { accountId: account.accountId, ownerName: ownerName.trim() } };
+	return { type: EventType.AccountCreated, data: { accountId: account.accountId, ownerName: ownerName.trim() } };
 }
 
 export function decideDeposit(account: Account, amount: number): AccountEvent {
 	assertOpened(account);
 	assertAmount(amount);
 
-	return { type: AccountEventType.MoneyDeposited, data: { accountId: account.accountId, amount } };
+	return { type: EventType.MoneyDeposited, data: { accountId: account.accountId, amount } };
 }
 
 export function decideWithdraw(account: Account, amount: number): AccountEvent {
@@ -80,7 +74,7 @@ export function decideWithdraw(account: Account, amount: number): AccountEvent {
 	assertAmount(amount);
 	assertFunds(account, amount);
 
-	return { type: AccountEventType.MoneyWithdrawn, data: { accountId: account.accountId, amount } };
+	return { type: EventType.MoneyWithdrawn, data: { accountId: account.accountId, amount } };
 }
 
 export function decideTransfer(from: Account, to: Account, amount: number): [AccountEvent, AccountEvent] {
@@ -98,11 +92,11 @@ export function decideTransfer(from: Account, to: Account, amount: number): [Acc
 
 	return [
 		{
-			type: AccountEventType.TransferSent,
+			type: EventType.TransferSent,
 			data: { accountId: from.accountId, transferId, counterpartyAccountId: to.accountId, amount },
 		},
 		{
-			type: AccountEventType.TransferReceived,
+			type: EventType.TransferReceived,
 			data: { accountId: to.accountId, transferId, counterpartyAccountId: from.accountId, amount },
 		},
 	];

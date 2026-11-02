@@ -96,7 +96,8 @@ apps/api/src/
   seed.ts                      opens the default accounts through the ledger, idempotently
   features/
     ledger/                        write side (KurrentDB)
-      domain/ledger.domain.ts               rules only: enums, events, fold, decide* (no I/O)
+      domain/ledger.events.ts               every event type and stream prefix in KurrentDB (enums)
+      domain/ledger.domain.ts               rules only: event payloads, fold, decide* (no I/O)
       repositories/ledger.repository.ts     KurrentDB reads, snapshots and atomic appends
       services/ledger.service.ts            commands: read, decide, append, retry, idempotency
       routes/ledger.routes.ts               POST /accounts, /accounts/:id/deposits, /withdrawals, /transfers

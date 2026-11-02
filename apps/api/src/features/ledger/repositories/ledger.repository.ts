@@ -10,6 +10,7 @@ import {
 	WrongExpectedVersionError,
 } from "@kurrent/kurrentdb-client";
 import { type Account, type AccountEvent, balanceOf } from "@api/features/ledger/domain/ledger.domain";
+import { EventType, StreamPrefix } from "@api/features/ledger/domain/ledger.events";
 
 export const store = KurrentDBClient.connectionString(Bun.env.KURRENTDB_URL as string);
 
@@ -22,15 +23,11 @@ export type ProcessedRequest = { accountId: string; key: string; request: string
 // The account's state at a revision, so loading replays only the events after it.
 type Snapshot = { balance: number; revision: string };
 
-export const ACCOUNT_STREAM_PREFIX = "account-";
 export const SNAPSHOT_EVERY = 100;
-const REQUEST_PROCESSED = "RequestProcessed";
-const ACCOUNT_SNAPSHOT = "AccountSnapshot";
 
-const accountStream = (accountId: string) => `${ACCOUNT_STREAM_PREFIX}${accountId}`;
-// Outside the account- prefix, so the projector never sees snapshots.
-const snapshotStream = (accountId: string) => `snapshot-${accountStream(accountId)}`;
-const idempotencyStream = (accountId: string, key: string) => `idempotency-${accountId}-${key}`;
+const accountStream = (accountId: string) => `${StreamPrefix.Account}${accountId}`;
+const snapshotStream = (accountId: string) => `${StreamPrefix.Snapshot}${accountId}`;
+const idempotencyStream = (accountId: string, key: string) => `${StreamPrefix.Idempotency}${accountId}-${key}`;
 
 async function readStream<T>(streamName: string, options?: ReadStreamOptions) {
 	const events: (T & { revision: bigint })[] = [];
@@ -65,7 +62,7 @@ async function saveSnapshot(accountId: string, snapshot: { balance: number; revi
 
 	await store.appendToStream(
 		streamName,
-		jsonEvent({ type: ACCOUNT_SNAPSHOT, data: { balance: snapshot.balance, revision: String(snapshot.revision) } }),
+		jsonEvent({ type: EventType.AccountSnapshot, data: { balance: snapshot.balance, revision: String(snapshot.revision) } }),
 	);
 	await store.setStreamMetadata(streamName, { maxCount: 1 });
 }
@@ -109,7 +106,7 @@ export async function appendEvents(appends: AccountAppend[], processed?: Process
 		writes.push({
 			streamName: idempotencyStream(accountId, key),
 			expectedState: NO_STREAM,
-			events: [jsonEvent({ type: REQUEST_PROCESSED, data: { request, response } })],
+			events: [jsonEvent({ type: EventType.RequestProcessed, data: { request, response } })],
 		});
 	}
 
