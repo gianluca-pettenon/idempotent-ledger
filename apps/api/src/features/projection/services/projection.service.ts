@@ -1,14 +1,16 @@
-import type { TransactionSQL } from "bun";
 import { type RecordedEvent, START, streamNameFilter } from "@kurrent/kurrentdb-client";
-import { type AccountEvent, AccountEventType, balanceOf } from "@api/features/ledger/domain/ledger.domain";
+import { type AccountEvent, AccountEventType, delta } from "@api/features/ledger/domain/ledger.domain";
 import { ACCOUNT_STREAM_PREFIX, store } from "@api/features/ledger/repositories/ledger.repository";
 import {
-	findBalance,
+	applyMovement,
+	createIndexes,
+	findAccount,
+	findAccounts,
 	findCheckpoint,
+	findOwnerName,
 	findRecentTransactions,
-	insertMovement,
+	insertAccount,
 	saveCheckpoint,
-	transaction,
 } from "@api/features/projection/repositories/projection.repository";
 
 const RECENT_TRANSACTIONS = 20;
@@ -20,37 +22,47 @@ export enum TransactionType {
 	TransferIn = "transfer_in",
 }
 
-const MOVEMENTS: Record<AccountEventType, { type: TransactionType; counterparty?: "toUserId" | "fromUserId" }> = {
-	[AccountEventType.MoneyDeposited]: { type: TransactionType.Deposit },
-	[AccountEventType.MoneyWithdrawn]: { type: TransactionType.Withdraw },
-	[AccountEventType.TransferSent]: { type: TransactionType.TransferOut, counterparty: "toUserId" },
-	[AccountEventType.TransferReceived]: { type: TransactionType.TransferIn, counterparty: "fromUserId" },
+const TRANSACTION_TYPES: Record<Exclude<AccountEventType, AccountEventType.AccountCreated>, TransactionType> = {
+	[AccountEventType.MoneyDeposited]: TransactionType.Deposit,
+	[AccountEventType.MoneyWithdrawn]: TransactionType.Withdraw,
+	[AccountEventType.TransferSent]: TransactionType.TransferOut,
+	[AccountEventType.TransferReceived]: TransactionType.TransferIn,
 };
 
-async function project(tx: TransactionSQL, event: RecordedEvent) {
+// The read model adds what the event does not carry: the balance, and the counterparty's name.
+async function project(event: RecordedEvent) {
 	const accountEvent = { type: event.type, data: event.data } as AccountEvent;
-	const movement = MOVEMENTS[accountEvent.type];
-	if (!movement) {
-		return;
+	const version = Number(event.revision);
+
+	if (accountEvent.type === AccountEventType.AccountCreated) {
+		const { accountId, ownerName } = accountEvent.data;
+
+		return insertAccount({ _id: accountId, ownerName, balance: 0, version });
 	}
 
-	const data = accountEvent.data as Record<string, string | number>;
-	const row = {
-		id: event.id,
-		userId: event.streamId.slice(ACCOUNT_STREAM_PREFIX.length),
-		type: movement.type,
-		amount: accountEvent.data.amount,
-		counterpartyUserId: movement.counterparty ? String(data[movement.counterparty]) : null,
-		createdAt: event.created,
-		position: event.position?.commit ?? 0n,
-	};
+	const { data } = accountEvent;
+	const counterpartyAccountId = "counterpartyAccountId" in data ? data.counterpartyAccountId : undefined;
 
-	return insertMovement(tx, row, balanceOf([accountEvent]));
+	return applyMovement(
+		{
+			_id: event.id,
+			accountId: data.accountId,
+			type: TRANSACTION_TYPES[accountEvent.type],
+			amount: data.amount,
+			counterpartyAccountId,
+			counterpartyName: counterpartyAccountId && (await findOwnerName(counterpartyAccountId)),
+			createdAt: event.created,
+			version,
+		},
+		delta(accountEvent),
+	);
 }
 
-// Catch-up subscription on $all. The checkpoint is saved in the same SQL transaction as the
-// projection, so a crash never applies an event twice nor skips one.
+// Catch-up subscription on $all. Projection writes are idempotent, so a crash between an event
+// and its checkpoint only replays that event, harmlessly.
 export async function runProjector() {
+	await createIndexes();
+
 	const subscription = store.subscribeToAll({
 		fromPosition: (await findCheckpoint()) ?? START,
 		filter: streamNameFilter({ prefixes: [ACCOUNT_STREAM_PREFIX] }),
@@ -60,23 +72,24 @@ export async function runProjector() {
 		if (!event?.position) {
 			continue;
 		}
-		const { position } = event;
 
-		await transaction(async (tx) => {
-			await project(tx, event);
-			await saveCheckpoint(tx, position);
-		});
+		await project(event);
+		await saveCheckpoint(event.position);
 	}
 }
 
-export async function getAccount(userId: string) {
-	const balance = await findBalance(userId);
+export function listAccounts() {
+	return findAccounts();
+}
 
-	if (balance === undefined) {
-		throw new Error(`Account not found for user ${userId}`, { cause: 404 });
+export async function getAccount(accountId: string) {
+	const account = await findAccount(accountId);
+
+	if (!account) {
+		throw new Error(`Account ${accountId} not found`, { cause: 404 });
 	}
 
-	return { balance, transactions: await findRecentTransactions(userId, RECENT_TRANSACTIONS) };
+	return { balance: account.balance, transactions: await findRecentTransactions(accountId, RECENT_TRANSACTIONS) };
 }
 
 if (import.meta.main) {

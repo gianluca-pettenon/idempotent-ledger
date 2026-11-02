@@ -3,7 +3,6 @@ import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
 import { IDEMPOTENCY_KEY_HEADER, ledgerRoutes } from "@api/features/ledger/routes/ledger.routes";
 import { projectionRoutes } from "@api/features/projection/routes/projection.routes";
-import { usersRoutes } from "@api/features/users/routes/users.routes";
 
 export const app = new Elysia({ prefix: "/api" })
 	.use(cors({ origin: Bun.env.WEB_ORIGIN, allowedHeaders: ["Content-Type", IDEMPOTENCY_KEY_HEADER, "X-Request-Id"] }))
@@ -17,7 +16,6 @@ export const app = new Elysia({ prefix: "/api" })
 
 		return { message: error.message };
 	})
-	.use(usersRoutes)
 	.use(ledgerRoutes)
 	.use(projectionRoutes);
 

@@ -1,70 +1,83 @@
-import type { TransactionSQL } from "bun";
-import { sql } from "@api/db/db";
+import { MongoClient } from "mongodb";
 
-export type Movement = {
-	id: string;
-	userId: string;
+const readModel = new MongoClient(Bun.env.MONGODB_URL as string, { ignoreUndefined: true }).db();
+
+type AccountDocument = { _id: string; ownerName: string; balance: number; version: number };
+
+export type TransactionDocument = {
+	_id: string;
+	accountId: string;
 	type: string;
 	amount: number;
-	counterpartyUserId: string | null;
+	counterpartyAccountId?: string;
+	counterpartyName?: string;
 	createdAt: Date;
-	position: bigint;
+	version: number;
 };
 
-export function transaction(work: (tx: TransactionSQL) => Promise<void>) {
-	return sql.begin(work);
+type CheckpointDocument = { _id: string; commit: string; prepare: string };
+
+const accounts = readModel.collection<AccountDocument>("accounts");
+const transactions = readModel.collection<TransactionDocument>("transactions");
+const checkpoints = readModel.collection<CheckpointDocument>("checkpoints");
+
+const PROJECTOR = "accounts";
+
+export function createIndexes() {
+	return transactions.createIndex({ accountId: 1, version: -1 });
 }
 
 export async function findCheckpoint() {
-	const [row] = await sql`SELECT commit, prepare FROM checkpoint`;
+	const checkpoint = await checkpoints.findOne({ _id: PROJECTOR });
 
-	return row && { commit: BigInt(row.commit), prepare: BigInt(row.prepare) };
+	return checkpoint && { commit: BigInt(checkpoint.commit), prepare: BigInt(checkpoint.prepare) };
 }
 
-export async function saveCheckpoint(tx: TransactionSQL, position: { commit: bigint; prepare: bigint }) {
-	await tx`
-		INSERT INTO checkpoint (commit, prepare) VALUES (${String(position.commit)}, ${String(position.prepare)})
-		ON CONFLICT (id) DO UPDATE SET commit = excluded.commit, prepare = excluded.prepare
-	`;
+export async function saveCheckpoint(position: { commit: bigint; prepare: bigint }) {
+	await checkpoints.updateOne(
+		{ _id: PROJECTOR },
+		{ $set: { commit: String(position.commit), prepare: String(position.prepare) } },
+		{ upsert: true },
+	);
 }
 
-export async function insertMovement(tx: TransactionSQL, movement: Movement, delta: number) {
-	await tx`
-		INSERT INTO accounts (user_id, balance) VALUES (${movement.userId}, ${delta})
-		ON CONFLICT (user_id) DO UPDATE SET balance = accounts.balance + excluded.balance
-	`;
-	await tx`
-		INSERT INTO transactions (id, user_id, type, amount, counterparty_user_id, created_at, position)
-		VALUES (${movement.id}, ${movement.userId}, ${movement.type}, ${movement.amount},
-			${movement.counterpartyUserId}, ${movement.createdAt}, ${String(movement.position)})
-	`;
+export async function insertAccount({ _id, ...account }: AccountDocument) {
+	await accounts.updateOne({ _id }, { $setOnInsert: account }, { upsert: true });
 }
 
-// Undefined when the user does not exist; 0 when it exists but has no movements yet.
-export async function findBalance(userId: string) {
-	const [row] = await sql`
-		SELECT COALESCE(a.balance, 0) AS balance FROM users u LEFT JOIN accounts a ON a.user_id = u.id WHERE u.id = ${userId}
-	`;
-
-	return row && Number(row.balance);
+// Both writes are idempotent: the transaction is keyed by the event id, and the balance only moves
+// when the event is newer than the account's version. Replaying an event after a crash changes nothing.
+export async function applyMovement({ _id, ...transaction }: TransactionDocument, delta: number) {
+	await transactions.updateOne({ _id }, { $setOnInsert: transaction }, { upsert: true });
+	await accounts.updateOne(
+		{ _id: transaction.accountId, version: { $lt: transaction.version } },
+		{ $inc: { balance: delta }, $set: { version: transaction.version } },
+	);
 }
 
-export async function findRecentTransactions(userId: string, limit: number) {
-	const rows = await sql`
-		SELECT t.id, t.type, t.amount, t.created_at, t.counterparty_user_id, u.name AS counterparty_name
-		FROM transactions t
-		LEFT JOIN users u ON u.id = t.counterparty_user_id
-		WHERE t.user_id = ${userId}
-		ORDER BY t.position DESC
-		LIMIT ${limit}
-	`;
+export async function findOwnerName(accountId: string) {
+	return (await accounts.findOne({ _id: accountId }))?.ownerName;
+}
 
-	return rows.map((row: Record<string, string | Date | null>) => ({
-		id: row.id,
-		type: row.type,
-		amount: Number(row.amount),
-		createdAt: row.created_at,
-		counterpartyUserId: row.counterparty_user_id ?? undefined,
-		counterpartyName: row.counterparty_name ?? undefined,
+export async function findAccounts() {
+	const documents = await accounts.find().sort({ ownerName: 1 }).toArray();
+
+	return documents.map(({ _id, ownerName }) => ({ id: _id, name: ownerName }));
+}
+
+export function findAccount(accountId: string) {
+	return accounts.findOne({ _id: accountId });
+}
+
+export async function findRecentTransactions(accountId: string, limit: number) {
+	const documents = await transactions.find({ accountId }).sort({ version: -1 }).limit(limit).toArray();
+
+	return documents.map(({ _id, type, amount, createdAt, counterpartyAccountId, counterpartyName }) => ({
+		id: _id,
+		type,
+		amount,
+		createdAt,
+		counterpartyAccountId,
+		counterpartyName,
 	}));
 }

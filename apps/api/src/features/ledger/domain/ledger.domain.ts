@@ -1,4 +1,5 @@
 export enum AccountEventType {
+	AccountCreated = "AccountCreated",
 	MoneyDeposited = "MoneyDeposited",
 	MoneyWithdrawn = "MoneyWithdrawn",
 	TransferSent = "TransferSent",
@@ -10,23 +11,31 @@ export enum Outcome {
 	Duplicate = "duplicate",
 }
 
+type Movement = { accountId: string; amount: number };
+type TransferMovement = Movement & { transferId: string; counterpartyAccountId: string };
+
 export type AccountEvent =
-	| { type: AccountEventType.MoneyDeposited; data: { amount: number } }
-	| { type: AccountEventType.MoneyWithdrawn; data: { amount: number } }
-	| { type: AccountEventType.TransferSent; data: { transferId: string; toUserId: string; amount: number } }
-	| { type: AccountEventType.TransferReceived; data: { transferId: string; fromUserId: string; amount: number } };
+	| { type: AccountEventType.AccountCreated; data: { accountId: string; ownerName: string } }
+	| { type: AccountEventType.MoneyDeposited; data: Movement }
+	| { type: AccountEventType.MoneyWithdrawn; data: Movement }
+	| { type: AccountEventType.TransferSent; data: TransferMovement }
+	| { type: AccountEventType.TransferReceived; data: TransferMovement };
 
-export type Account = { userId: string; balance: number };
+export type Account = { accountId: string; opened: boolean; balance: number };
 
-const SIGN: Record<AccountEventType, 1 | -1> = {
+const SIGN: Record<Exclude<AccountEventType, AccountEventType.AccountCreated>, 1 | -1> = {
 	[AccountEventType.MoneyDeposited]: 1,
 	[AccountEventType.TransferReceived]: 1,
 	[AccountEventType.MoneyWithdrawn]: -1,
 	[AccountEventType.TransferSent]: -1,
 };
 
+export function delta(event: AccountEvent) {
+	return event.type === AccountEventType.AccountCreated ? 0 : SIGN[event.type] * event.data.amount;
+}
+
 export function balanceOf(events: AccountEvent[]) {
-	return events.reduce((balance, event) => balance + SIGN[event.type] * event.data.amount, 0);
+	return events.reduce((balance, event) => balance + delta(event), 0);
 }
 
 function assertAmount(amount: number) {
@@ -35,29 +44,51 @@ function assertAmount(amount: number) {
 	}
 }
 
-function assertFunds(account: Account, amount: number) {
-	if (account.balance < amount) {
-		throw new Error(`Account ${account.userId} has insufficient balance`, { cause: 422 });
+function assertOpened(account: Account) {
+	if (!account.opened) {
+		throw new Error(`Account ${account.accountId} not found`, { cause: 404 });
 	}
 }
 
-export function decideDeposit(amount: number): AccountEvent {
+function assertFunds(account: Account, amount: number) {
+	if (account.balance < amount) {
+		throw new Error(`Account ${account.accountId} has insufficient balance`, { cause: 422 });
+	}
+}
+
+export function decideCreate(account: Account, ownerName: string): AccountEvent {
+	if (typeof ownerName !== "string" || !ownerName.trim()) {
+		throw new Error("Owner name is required", { cause: 422 });
+	}
+
+	if (account.opened) {
+		throw new Error(`Account ${account.accountId} already exists`, { cause: 409 });
+	}
+
+	return { type: AccountEventType.AccountCreated, data: { accountId: account.accountId, ownerName: ownerName.trim() } };
+}
+
+export function decideDeposit(account: Account, amount: number): AccountEvent {
+	assertOpened(account);
 	assertAmount(amount);
 
-	return { type: AccountEventType.MoneyDeposited, data: { amount } };
+	return { type: AccountEventType.MoneyDeposited, data: { accountId: account.accountId, amount } };
 }
 
 export function decideWithdraw(account: Account, amount: number): AccountEvent {
+	assertOpened(account);
 	assertAmount(amount);
 	assertFunds(account, amount);
 
-	return { type: AccountEventType.MoneyWithdrawn, data: { amount } };
+	return { type: AccountEventType.MoneyWithdrawn, data: { accountId: account.accountId, amount } };
 }
 
 export function decideTransfer(from: Account, to: Account, amount: number): [AccountEvent, AccountEvent] {
+	assertOpened(from);
+	assertOpened(to);
 	assertAmount(amount);
 
-	if (from.userId === to.userId) {
+	if (from.accountId === to.accountId) {
 		throw new Error("Cannot transfer to the same account", { cause: 422 });
 	}
 
@@ -66,7 +97,13 @@ export function decideTransfer(from: Account, to: Account, amount: number): [Acc
 	const transferId = Bun.randomUUIDv7();
 
 	return [
-		{ type: AccountEventType.TransferSent, data: { transferId, toUserId: to.userId, amount } },
-		{ type: AccountEventType.TransferReceived, data: { transferId, fromUserId: from.userId, amount } },
+		{
+			type: AccountEventType.TransferSent,
+			data: { accountId: from.accountId, transferId, counterpartyAccountId: to.accountId, amount },
+		},
+		{
+			type: AccountEventType.TransferReceived,
+			data: { accountId: to.accountId, transferId, counterpartyAccountId: from.accountId, amount },
+		},
 	];
 }

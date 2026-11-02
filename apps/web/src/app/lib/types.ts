@@ -18,7 +18,7 @@ export type Transaction = {
     | 'reversal_out';
   amount: number;
   createdAt: string;
-  counterpartyUserId?: string;
+  counterpartyAccountId?: string;
   counterpartyName?: string;
 };
 

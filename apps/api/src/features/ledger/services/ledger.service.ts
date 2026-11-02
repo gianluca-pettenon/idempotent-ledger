@@ -1,76 +1,97 @@
 import { OperationKind } from "@banking-ledger/shared";
-import { balanceOf, decideDeposit, decideTransfer, decideWithdraw, Outcome } from "@api/features/ledger/domain/ledger.domain";
+import {
+	balanceOf,
+	decideCreate,
+	decideDeposit,
+	decideTransfer,
+	decideWithdraw,
+	Outcome,
+} from "@api/features/ledger/domain/ledger.domain";
 import { type AccountAppend, appendEvents, findProcessedRequest, loadAccount } from "@api/features/ledger/repositories/ledger.repository";
-import { userExists } from "@api/features/users/repositories/users.repository";
 
 const MAX_ATTEMPTS = 20;
 
-type Request = { type: OperationKind; userId: string; toUserId?: string; amount: number };
+// Fixed namespace so the same Idempotency-Key always derives the same account id.
+const ACCOUNT_ID_NAMESPACE = "8f0c2e4a-3b1d-4c6e-9a7f-5d2b8e1c4a90";
 
-type Decision = { appends: AccountAppend[]; balance: number };
+// The whole request is stored with the idempotency record, so reusing a key for another payload is a 409.
+type Request = { accountId: string; [field: string]: unknown };
 
-async function execute(request: Request, key: string | null, decide: () => Promise<Decision>) {
-	for (const userId of [request.userId, request.toUserId].filter((id) => id !== undefined)) {
-		if (!(await userExists(userId))) {
-			throw new Error(`Account not found for user ${userId}`, { cause: 404 });
-		}
-	}
+type Decision<T> = { appends: AccountAppend[]; response: T };
 
+async function execute<T extends object>(request: Request, key: string | null, decide: () => Promise<Decision<T>>) {
 	const requestJson = JSON.stringify(request);
 
 	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 		if (key) {
-			const previous = await findProcessedRequest(request.userId, key);
+			const previous = await findProcessedRequest(request.accountId, key);
 
 			if (previous) {
 				if (previous.request !== requestJson) {
 					throw new Error(`Idempotency-Key "${key}" was already used with a different request`, { cause: 409 });
 				}
 
-				return { balance: previous.balance, outcome: Outcome.Duplicate };
+				return { ...(previous.response as T), outcome: Outcome.Duplicate };
 			}
 		}
 
-		const { appends, balance } = await decide();
-		const processed = key ? { userId: request.userId, key, request: requestJson, balance } : undefined;
+		const { appends, response } = await decide();
+		const processed = key ? { accountId: request.accountId, key, request: requestJson, response } : undefined;
 
 		if (await appendEvents(appends, processed)) {
-			return { balance, outcome: Outcome.Processed };
+			return { ...response, outcome: Outcome.Processed };
 		}
 	}
 
 	throw new Error("Account is under heavy contention, retry later", { cause: 409 });
 }
 
-export function deposit(userId: string, amount: number, key: string | null) {
-	return execute({ type: OperationKind.Deposit, userId, amount }, key, async () => {
-		const account = await loadAccount(userId);
-		const event = decideDeposit(amount);
+export function createAccount(ownerName: string, key: string | null) {
+	const accountId = key ? Bun.randomUUIDv5(key, ACCOUNT_ID_NAMESPACE) : Bun.randomUUIDv7();
 
-		return { appends: [{ userId, revision: account.revision, event }], balance: account.balance + balanceOf([event]) };
+	return execute({ accountId, ownerName }, key, async () => {
+		const account = await loadAccount(accountId);
+		const event = decideCreate(account, ownerName);
+
+		return { appends: [{ accountId, revision: account.revision, event }], response: { accountId, balance: 0 } };
 	});
 }
 
-export function withdraw(userId: string, amount: number, key: string | null) {
-	return execute({ type: OperationKind.Withdraw, userId, amount }, key, async () => {
-		const account = await loadAccount(userId);
+export function deposit(accountId: string, amount: number, key: string | null) {
+	return execute({ type: OperationKind.Deposit, accountId, amount }, key, async () => {
+		const account = await loadAccount(accountId);
+		const event = decideDeposit(account, amount);
+
+		return {
+			appends: [{ accountId, revision: account.revision, event }],
+			response: { balance: account.balance + balanceOf([event]) },
+		};
+	});
+}
+
+export function withdraw(accountId: string, amount: number, key: string | null) {
+	return execute({ type: OperationKind.Withdraw, accountId, amount }, key, async () => {
+		const account = await loadAccount(accountId);
 		const event = decideWithdraw(account, amount);
 
-		return { appends: [{ userId, revision: account.revision, event }], balance: account.balance + balanceOf([event]) };
+		return {
+			appends: [{ accountId, revision: account.revision, event }],
+			response: { balance: account.balance + balanceOf([event]) },
+		};
 	});
 }
 
-export function transfer(fromUserId: string, toUserId: string, amount: number, key: string | null) {
-	return execute({ type: OperationKind.Transfer, userId: fromUserId, toUserId, amount }, key, async () => {
-		const [from, to] = await Promise.all([loadAccount(fromUserId), loadAccount(toUserId)]);
+export function transfer(fromAccountId: string, toAccountId: string, amount: number, key: string | null) {
+	return execute({ type: OperationKind.Transfer, accountId: fromAccountId, toAccountId, amount }, key, async () => {
+		const [from, to] = await Promise.all([loadAccount(fromAccountId), loadAccount(toAccountId)]);
 		const [sent, received] = decideTransfer(from, to, amount);
 
 		return {
 			appends: [
-				{ userId: fromUserId, revision: from.revision, event: sent },
-				{ userId: toUserId, revision: to.revision, event: received },
+				{ accountId: fromAccountId, revision: from.revision, event: sent },
+				{ accountId: toAccountId, revision: to.revision, event: received },
 			],
-			balance: from.balance + balanceOf([sent]),
+			response: { balance: from.balance + balanceOf([sent]) },
 		};
 	});
 }

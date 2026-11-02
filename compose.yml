@@ -15,31 +15,27 @@ services:
       timeout: 5s
       retries: 10
 
-  postgres:
-    image: postgres:18-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+  mongodb:
+    image: mongo:8
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${MONGODB_PORT}:27017"
     volumes:
-      - readmodel:/var/lib/postgresql
+      - mongodb:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  migrate:
+  seed:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["bun", "run", "apps/api/src/db/db.ts"]
+    command: ["bun", "run", "apps/api/src/seed.ts"]
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
     depends_on:
-      postgres:
+      kurrentdb:
         condition: service_healthy
 
   projector:
@@ -50,12 +46,12 @@ services:
     restart: unless-stopped
     environment:
       KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MONGODB_URL: mongodb://mongodb:27017/banking-ledger
     depends_on:
       kurrentdb:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
+      mongodb:
+        condition: service_healthy
 
   api:
     build:
@@ -66,13 +62,13 @@ services:
       - "${API_PORT}:${API_PORT}"
     environment:
       KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MONGODB_URL: mongodb://mongodb:27017/banking-ledger
       WEB_ORIGIN: http://localhost:${PORT}
     depends_on:
       kurrentdb:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
+      mongodb:
+        condition: service_healthy
 
   web:
     build:
@@ -89,4 +85,4 @@ services:
 
 volumes:
   kurrentdb:
-  readmodel:
+  mongodb:

@@ -35,8 +35,8 @@ const REQUEST_BUILDER: Record<
   [OperationKind.Transfer]: (params) => ({
     path: '/transfers',
     body: {
-      fromUserId: params.userId,
-      toUserId: params.toUserId,
+      fromAccountId: params.userId,
+      toAccountId: params.toUserId,
       amount: params.amount,
     },
   }),
@@ -112,7 +112,7 @@ async function runRequest(
 }
 
 export async function fetchUsers() {
-  const { data } = await request<ApiResponse<User[]>>('/users');
+  const { data } = await request<ApiResponse<User[]>>('/accounts');
 
   return { users: data };
 }

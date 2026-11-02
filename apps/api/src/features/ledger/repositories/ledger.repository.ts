@@ -1,8 +1,11 @@
 import {
 	type AppendStreamRequest,
+	BACKWARDS,
+	END,
 	jsonEvent,
 	KurrentDBClient,
 	NO_STREAM,
+	type ReadStreamOptions,
 	StreamNotFoundError,
 	WrongExpectedVersionError,
 } from "@kurrent/kurrentdb-client";
@@ -12,21 +15,28 @@ export const store = KurrentDBClient.connectionString(Bun.env.KURRENTDB_URL as s
 
 type Revision = bigint | typeof NO_STREAM;
 
-export type AccountAppend = { userId: string; revision: Revision; event: AccountEvent };
+export type AccountAppend = { accountId: string; revision: Revision; event: AccountEvent };
 
-export type ProcessedRequest = { userId: string; key: string; request: string; balance: number };
+export type ProcessedRequest = { accountId: string; key: string; request: string; response: object };
+
+// The account's state at a revision, so loading replays only the events after it.
+type Snapshot = { balance: number; revision: string };
 
 export const ACCOUNT_STREAM_PREFIX = "account-";
+export const SNAPSHOT_EVERY = 100;
 const REQUEST_PROCESSED = "RequestProcessed";
+const ACCOUNT_SNAPSHOT = "AccountSnapshot";
 
-const accountStream = (userId: string) => `${ACCOUNT_STREAM_PREFIX}${userId}`;
-const idempotencyStream = (userId: string, key: string) => `idempotency-${userId}-${key}`;
+const accountStream = (accountId: string) => `${ACCOUNT_STREAM_PREFIX}${accountId}`;
+// Outside the account- prefix, so the projector never sees snapshots.
+const snapshotStream = (accountId: string) => `snapshot-${accountStream(accountId)}`;
+const idempotencyStream = (accountId: string, key: string) => `idempotency-${accountId}-${key}`;
 
-async function readStream<T>(streamName: string) {
+async function readStream<T>(streamName: string, options?: ReadStreamOptions) {
 	const events: (T & { revision: bigint })[] = [];
 
 	try {
-		for await (const { event } of store.readStream(streamName)) {
+		for await (const { event } of store.readStream(streamName, options)) {
 			if (event) {
 				events.push({ ...(event as T), revision: event.revision });
 			}
@@ -40,35 +50,66 @@ async function readStream<T>(streamName: string) {
 	return events;
 }
 
-// An account with no events yet is an empty stream: balance 0, appended to as NO_STREAM.
-// shortcut: replays the whole stream on every command, add snapshots once accounts hold thousands of events.
-export async function loadAccount(userId: string): Promise<Account & { revision: Revision }> {
-	const events = await readStream<AccountEvent>(accountStream(userId));
+export async function findSnapshot(accountId: string) {
+	const [event] = await readStream<{ data: Snapshot }>(snapshotStream(accountId), {
+		direction: BACKWARDS,
+		fromRevision: END,
+		maxCount: 1,
+	});
 
-	return { userId, revision: events.at(-1)?.revision ?? NO_STREAM, balance: balanceOf(events) };
+	return event && { balance: event.data.balance, revision: BigInt(event.data.revision) };
 }
 
-export async function findProcessedRequest(userId: string, key: string) {
-	const [event] = await readStream<{ data: { request: string; balance: number } }>(idempotencyStream(userId, key));
+async function saveSnapshot(accountId: string, snapshot: { balance: number; revision: bigint }) {
+	const streamName = snapshotStream(accountId);
+
+	await store.appendToStream(
+		streamName,
+		jsonEvent({ type: ACCOUNT_SNAPSHOT, data: { balance: snapshot.balance, revision: String(snapshot.revision) } }),
+	);
+	await store.setStreamMetadata(streamName, { maxCount: 1 });
+}
+
+// The account is rebuilt from the event store only: the latest snapshot plus the events after it.
+// It exists once its stream holds AccountCreated; until then it is appended to as NO_STREAM.
+export async function loadAccount(accountId: string): Promise<Account & { revision: Revision }> {
+	const snapshot = await findSnapshot(accountId);
+	const events = await readStream<AccountEvent>(
+		accountStream(accountId),
+		snapshot && { fromRevision: snapshot.revision + 1n },
+	);
+	const lastRevision = events.at(-1)?.revision ?? snapshot?.revision;
+	const balance = (snapshot?.balance ?? 0) + balanceOf(events);
+
+	// A snapshot is a cache of immutable history, so any reader may write one; it never needs a lock.
+	if (lastRevision !== undefined && events.length >= SNAPSHOT_EVERY) {
+		await saveSnapshot(accountId, { balance, revision: lastRevision });
+	}
+
+	return { accountId, opened: lastRevision !== undefined, revision: lastRevision ?? NO_STREAM, balance };
+}
+
+export async function findProcessedRequest(accountId: string, key: string) {
+	const [event] = await readStream<{ data: { request: string; response: object } }>(idempotencyStream(accountId, key));
 
 	return event?.data;
 }
 
 // One atomic append across every touched stream. Returns false when another writer got there first.
 export async function appendEvents(appends: AccountAppend[], processed?: ProcessedRequest) {
-	const writes: AppendStreamRequest[] = appends.map(({ userId, revision, event }) => ({
-		streamName: accountStream(userId),
+	const writes: AppendStreamRequest[] = appends.map(({ accountId, revision, event }) => ({
+		streamName: accountStream(accountId),
 		expectedState: revision,
 		events: [jsonEvent(event)],
 	}));
 
 	if (processed) {
-		const { userId, key, request, balance } = processed;
+		const { accountId, key, request, response } = processed;
 
 		writes.push({
-			streamName: idempotencyStream(userId, key),
+			streamName: idempotencyStream(accountId, key),
 			expectedState: NO_STREAM,
-			events: [jsonEvent({ type: REQUEST_PROCESSED, data: { request, balance } })],
+			events: [jsonEvent({ type: REQUEST_PROCESSED, data: { request, response } })],
 		});
 	}
 

@@ -1,15 +1,16 @@
 ## What this is
 
-An event-sourced ledger with CQRS, combining an event store with a relational database, the usual shape in banks:
+An event-sourced ledger with CQRS, split into processes that only meet through the event store:
 
-- **KurrentDB** ([formerly EventStoreDB](https://www.kurrent.io/)) holds the money: every movement is an immutable event, and it is the source of truth for balances.
-- **Postgres** holds the master data (users, created by migrations) and the read model (balances and statements, projected from the events).
+- **KurrentDB** ([formerly EventStoreDB](https://www.kurrent.io/)) is the source of truth. Every fact, from opening an account to moving money, is an immutable event.
+- **MongoDB** holds the read model: one document per account and one per statement line, projected from the events.
+- **api** decides and appends. **projector** subscribes and writes MongoDB. **seed** opens the default accounts. Each scales and fails on its own: the API is stateless, so it can run many replicas, and optimistic concurrency keeps them consistent.
 
 It is not a payment rail or a bank core. It shows idempotent commands, optimistic concurrency, atomic multi-account writes, and a rebuildable read model.
 
 ```text
             commands                         queries
-POST ...  ──────────► API ──append──► KurrentDB        API ◄──SELECT── Postgres
+POST ...  ──────────► api ──append──► KurrentDB        api ◄──find── MongoDB
                        (decide on the                              ▲
                         stream's fold)          projector ─────────┘
                                          (subscribeToAll + checkpoint)
@@ -17,35 +18,57 @@ POST ...  ──────────► API ──append──► KurrentDB 
 
 ## Model
 
-One stream per account. A user's account exists as soon as the user exists in Postgres; its stream starts with the first movement.
+One stream per account. The account exists once its stream holds `AccountCreated`. Every event carries the `accountId` it belongs to.
 
 ```text
-account-{userId}       MoneyDeposited   { amount }
-                       MoneyWithdrawn   { amount }
-                       TransferSent     { transferId, toUserId, amount }
-                       TransferReceived { transferId, fromUserId, amount }
-idempotency-{userId}-{key}
-                       RequestProcessed { request, balance }
+account-{accountId}    AccountCreated   { accountId, ownerName }
+                       MoneyDeposited   { accountId, amount }
+                       MoneyWithdrawn   { accountId, amount }
+                       TransferSent     { accountId, transferId, counterpartyAccountId, amount }
+                       TransferReceived { accountId, transferId, counterpartyAccountId, amount }
+idempotency-{accountId}-{key}
+                       RequestProcessed { request, response }
 ```
 
 ```text
 balance = Σ MoneyDeposited + Σ TransferReceived − Σ MoneyWithdrawn − Σ TransferSent
 ```
 
-Corrections are new events, never edits. Commands always decide on the stream itself, never on Postgres, so the invariants (no overdraft) hold even when the read model lags.
+### Snapshots
+
+Commands rebuild the account from the event store, never from MongoDB, so a lagging read model can never let a withdrawal or transfer through without funds. To keep that cheap, the account's state is snapshotted:
+
+```text
+snapshot-account-{accountId}   AccountSnapshot { balance, revision }   (stream keeps only the latest)
+
+load = latest snapshot + events of account-{accountId} after its revision
+```
+
+Whenever a load replays `SNAPSHOT_EVERY` (100) events or more, it saves the state it just folded. A snapshot is a cache of immutable history: any reader may write one, it needs no lock, and deleting it only makes the next load slower. The `snapshot-` prefix keeps it out of the projector's `account-*` filter.
+
+Corrections are new events, never edits. Commands always decide on the stream itself, never on MongoDB, so the invariants (no overdraft, no movement on an unknown account) hold even when the read model lags.
 
 ## Read model
 
-The projector is a catch-up subscription on `$all` (filtered to `account-*`). For every event it updates `accounts.balance` and `transactions` **and** saves the `$all` position to `checkpoint`, all in one SQL transaction. A crash or restart resumes from the checkpoint, so no event is skipped or applied twice.
+The projector is a catch-up subscription on `$all` (filtered to `account-*`). It adds what the events do not carry:
 
-The read model is disposable: truncate `accounts`, `transactions` and `checkpoint` and the projector rebuilds them from the events. `users` is not part of it; it belongs to the migrations. Reads are eventually consistent, typically a few milliseconds behind the writes.
+```text
+AccountCreated  { accountId, ownerName }   ->  accounts     { _id, ownerName, balance: 0, version: 0 }
+MoneyDeposited  { accountId, amount }      ->  accounts     $inc balance, version = stream revision
+                                               transactions { _id: eventId, type, amount, ... }
+TransferSent    { ..., counterpartyAccountId } ->  transactions also get the counterparty's name
+```
+
+There are no multi-document transactions. Every write is idempotent instead: statement lines are upserted by event id, and the balance only moves when the event is newer than the account's `version`. The `$all` position is saved after each event, so a crash replays at most one event, harmlessly.
+
+The read model is disposable: drop the `banking-ledger` database and the projector rebuilds it from the events. Reads are eventually consistent, typically a few milliseconds behind the writes.
 
 ## A command
 
 ```text
 POST /transfers   Idempotency-Key: K
   |
-  1. read idempotency-{user}-{K}
+  1. read idempotency-{from}-{K}
        exists, same request      -> replay saved result   (duplicate)
        exists, different request -> 409
   2. read both account streams, fold balances, remember each stream's revision
@@ -61,42 +84,37 @@ POST /transfers   Idempotency-Key: K
 - **Atomic transfers**: both legs and the idempotency record commit together or not at all (`multiStreamAppend`, KurrentDB 25.1+).
 - **Idempotency** is a stream that can be created only once. Two concurrent requests with the same key race on `no_stream`; the loser retries, finds the record and replays it.
 
-The idempotency scope is `(user, key)`, and the stored request includes the operation, so reusing a key for a different payload is a 409.
+Opening an account with an `Idempotency-Key` derives the account id from the key (UUIDv5), so a retried create lands on the same stream and collapses into one account. The seed relies on this to be safe to rerun.
+
+The idempotency scope is `(account, key)`, and the stored request includes the operation, so reusing a key for a different payload is a 409.
 
 ## Code
 
 ```text
 apps/api/src/
   server.ts                    composes the features into one Elysia app
-  db/
-    schema.ts                  Drizzle schema, the source of the migrations
-    migrations/                generated by drizzle-kit (0000_schema, 0001_seed_users)
-    db.ts                      Postgres client; run directly, applies the migrations
+  seed.ts                      opens the default accounts through the ledger, idempotently
   features/
-    users/                         master data (Postgres)
-      repositories/users.repository.ts      list users, check existence
-      routes/users.routes.ts                GET /users
     ledger/                        write side (KurrentDB)
       domain/ledger.domain.ts               rules only: enums, events, fold, decide* (no I/O)
-      repositories/ledger.repository.ts     KurrentDB reads and atomic appends
+      repositories/ledger.repository.ts     KurrentDB reads, snapshots and atomic appends
       services/ledger.service.ts            commands: read, decide, append, retry, idempotency
-      routes/ledger.routes.ts               POST /accounts/:id/deposits, /withdrawals, /transfers
-    projection/                    read side (Postgres)
-      repositories/projection.repository.ts every SQL statement
-      services/projection.service.ts        projector (event -> rows) and queries
-      routes/projection.routes.ts           GET /accounts/:id
+      routes/ledger.routes.ts               POST /accounts, /accounts/:id/deposits, /withdrawals, /transfers
+    projection/                    read side (MongoDB)
+      repositories/projection.repository.ts every MongoDB query
+      services/projection.service.ts        projector (event -> documents) and queries
+      routes/projection.routes.ts           GET /accounts, /accounts/:id
 
 apps/api/tests/                    mirrors src/
   features/ledger/
     domain/ledger.domain.test.ts            unit tests of the rules, no database
-    ledger.test.ts                          end-to-end tests against real KurrentDB and Postgres
+    repositories/ledger.repository.test.ts  rehydration from a snapshot
+    ledger.test.ts                          end-to-end tests against real KurrentDB and MongoDB
 ```
 
-Each layer only talks to the one below it: routes → service → domain and repository. Rules never touch I/O, and SQL never holds a rule.
+Each layer only talks to the one below it: routes → service → domain and repository. Rules never touch I/O, and queries never hold a rule.
 
-Validation lives in the domain, not in the routes: the amount must be a positive integer, and unknown accounts are a 404. Every endpoint answers `{ data }`. Errors are plain `new Error(message, { cause: status })`; one `onError` turns them into `{ message }` with that status.
-
-Migrations are Drizzle's: change `schema.ts`, run `bun run db:generate`, and commit the generated SQL. They are applied by Drizzle's migrator in a one-shot `migrate` service; the projector and the API start only after it completes. Locally, `bun run db:migrate` applies them.
+Validation lives in the domain, not in the routes: the amount must be a positive integer, the owner name is required, and unknown accounts are a 404. Every endpoint answers `{ data }`. Errors are plain `new Error(message, { cause: status })`; one `onError` turns them into `{ message }` with that status.
 
 ## Getting started
 
@@ -105,38 +123,36 @@ Migrations are Drizzle's: change `schema.ts`, run `bun run db:generate`, and com
 ```text
 KURRENTDB_URL=kurrentdb://localhost:2113?tls=false
 
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=banking-ledger
-POSTGRES_PORT=5432
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/banking-ledger
+MONGODB_PORT=27017
+MONGODB_URL=mongodb://localhost:27017/banking-ledger
 
 PORT=3000
 API_PORT=3001
 ```
 
 ```bash
-make up      # KurrentDB, Postgres, projector, API and web
+make up      # KurrentDB, MongoDB, seed, projector, API and web
 make down    # stop everything
-make test    # API tests against throwaway KurrentDB and Postgres
+make test    # API tests against throwaway KurrentDB and MongoDB
 ```
 
-Web on `localhost:3000`, API on `localhost:3001` (OpenAPI at `/api/docs`), KurrentDB UI on `localhost:2113`. In the web app, pick a user and run the concurrency lab: with an idempotency key four parallel deposits collapse into one; without it all four apply and none is lost.
+Web on `localhost:3000`, API on `localhost:3001` (OpenAPI at `/api/docs`), KurrentDB UI on `localhost:2113`. In the web app, pick an account and run the concurrency lab: with an idempotency key four parallel deposits collapse into one; without it all four apply and none is lost.
 
 ## Where the guarantee ends
 
 ```text
 covered
   atomic, append-only writes across accounts
-  idempotent effect per (user, key)
+  idempotent effect per (account, key)
   optimistic concurrency without lost updates
   full audit trail: the stream is the history
-  exactly-once projection into Postgres (checkpoint in the same transaction)
+  bounded rehydration: at most SNAPSHOT_EVERY events replayed per command
+  effectively-once projection into MongoDB (idempotent writes + checkpoint)
 
 not covered
-  snapshots (every command replays the stream)
+  snapshot schema versioning (change the fold -> delete the snapshot streams)
   read-your-writes on queries, currencies/FX, authentication
-  external payment rails, distributed exactly-once, HA/DR
+  external payment rails, HA/DR, more than one projector instance at a time
 ```
 
 ## Preview

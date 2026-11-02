@@ -7,15 +7,12 @@
 		"@elysia/openapi": "^1.4.16",
 		"@elysiajs/cors": "^1.4.2",
 		"@kurrent/kurrentdb-client": "1.3.1",
-		"drizzle-orm": "^0.44.5",
-		"elysia": "^1.4.30"
+		"elysia": "^1.4.30",
+		"mongodb": "^7.8.0"
 	},
 	"scripts": {
 		"dev": "bun --hot run src/server.ts",
 		"start": "bun run src/server.ts",
 		"test": "bun test tests"
-	},
-	"devDependencies": {
-		"drizzle-kit": "^0.31.4"
 	}
 }
