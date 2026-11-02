@@ -121,6 +121,7 @@ export const STATEMENT = {
   BADGE: {
     DEPOSIT: 'Deposit',
     WITHDRAWAL: 'Withdrawal',
+    REVERSAL: 'Reversal',
     RECEIVED: 'Received',
     SENT: 'Sent',
   },

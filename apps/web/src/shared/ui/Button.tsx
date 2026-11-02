@@ -1,13 +1,7 @@
 import type { ComponentProps } from 'react';
 import { cn } from '@/shared/lib/cn';
 
-export type ButtonVariant =
-  | 'primary'
-  | 'secondary'
-  | 'danger'
-  | 'info'
-  | 'ghost'
-  | 'outline';
+export type ButtonVariant = 'primary' | 'danger' | 'info' | 'outline';
 
 type ButtonProps = ComponentProps<'button'> & {
   variant?: ButtonVariant;
@@ -16,21 +10,17 @@ type ButtonProps = ComponentProps<'button'> & {
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
     'border-transparent bg-primary text-primary-foreground hover:brightness-105',
-  secondary:
-    'border-border bg-secondary text-secondary-foreground hover:border-border-strong hover:bg-secondary/92',
   danger:
     'border-transparent bg-danger text-danger-foreground hover:brightness-105',
   info: 'border-transparent bg-info text-info-foreground hover:brightness-105',
   outline:
     'border-border bg-background/50 text-muted-foreground hover:border-ring/60 hover:bg-muted/80 hover:text-foreground',
-  ghost:
-    'h-auto w-full justify-start rounded-2xl border border-transparent bg-transparent px-3 py-2.5 text-left font-normal text-foreground hover:border-border/70 hover:bg-muted/80',
 };
 
 export function Button({
   className,
   type = 'button',
-  variant = 'secondary',
+  variant = 'outline',
   ...props
 }: ButtonProps) {
   return (

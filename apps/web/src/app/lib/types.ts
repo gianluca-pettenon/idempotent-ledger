@@ -9,7 +9,13 @@ export type User = {
 
 export type Transaction = {
   id: string;
-  type: 'deposit' | 'withdraw' | 'transfer_in' | 'transfer_out';
+  type:
+    | 'deposit'
+    | 'withdraw'
+    | 'transfer_in'
+    | 'transfer_out'
+    | 'reversal_in'
+    | 'reversal_out';
   amount: number;
   createdAt: string;
   counterpartyUserId?: string;
@@ -18,6 +24,7 @@ export type Transaction = {
 
 export type Account = {
   balance: number;
+  currency?: string;
   transactions: Transaction[];
 };
 

@@ -1,5 +1,7 @@
 import { Elysia, t } from "elysia";
 import { transfer } from "@api/features/ledger";
+import { parseJsonAmount } from "@api/features/ledger/money";
+import { toPublicJson } from "@api/features/ledger/public-json";
 import { readRequestMeta } from "@api/request-meta";
 
 const transferBodySchema = t.Object({
@@ -16,12 +18,12 @@ export const transfersRoutes = new Elysia().post(
 		const { result: account, outcome } = await transfer({
 			fromUserId: body.fromUserId,
 			toUserId: body.toUserId,
-			amount: body.amount,
+			amount: parseJsonAmount(body.amount),
 			requestId,
 			idempotencyKey,
 		});
 
-		return { success: true, account, meta: { outcome } };
+		return { success: true, account: toPublicJson(account), meta: { outcome } };
 	},
 	{
 		body: transferBodySchema,

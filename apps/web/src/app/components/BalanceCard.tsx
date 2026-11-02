@@ -11,6 +11,7 @@ type BalanceCardProps = {
 const OUTGOING_TYPES: ReadonlySet<Transaction['type']> = new Set([
   'withdraw',
   'transfer_out',
+  'reversal_out',
 ]);
 
 const TRANSACTION_LABEL: Record<
@@ -27,6 +28,8 @@ const TRANSACTION_LABEL: Record<
     counterpartyName
       ? STATEMENT.transferTo(counterpartyName)
       : STATEMENT.OUTGOING_TRANSFER,
+  reversal_in: () => STATEMENT.BADGE.REVERSAL,
+  reversal_out: () => STATEMENT.BADGE.REVERSAL,
 };
 
 function getTransactionViewModel(transaction: Transaction) {

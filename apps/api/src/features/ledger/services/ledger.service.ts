@@ -3,39 +3,104 @@ import { OperationKind } from "@banking-ledger/shared";
 import { withIdempotency } from "@api/features/idempotency";
 import {
 	AccountNotFoundError,
-	InsufficientBalanceError,
-	InvalidAmountError,
+	AlreadyReversedError,
+	CannotReverseReversalError,
+	CurrencyMismatchError,
+	InvalidTransitionError,
 	OptimisticLockError,
 	SameAccountTransferError,
+	SettlementAccountNotFoundError,
+	TransactionNotFoundError,
 } from "@api/features/ledger/errors";
+import { assertPositiveAmount, assertSufficientBalance, entryDelta } from "@api/features/ledger/money";
 import { AccountsRepository } from "@api/features/ledger/repositories/accounts.repository";
 import { LedgerRepository } from "@api/features/ledger/repositories/ledger.repository";
+import { OutboxRepository } from "@api/features/ledger/repositories/outbox.repository";
 import { UsersRepository } from "@api/features/ledger/repositories/users.repository";
 
-const MAX_LOCK_RETRIES = 5;
+export { assertPositiveAmount, assertSufficientBalance } from "@api/features/ledger/money";
+
+const MAX_LOCK_RETRIES = 16;
 const RECENT_TRANSACTIONS_LIMIT = 20;
+const REVERSAL_SCOPE = "reversal";
 
-export function assertPositiveAmount(amount: number) {
-	if (amount <= 0) {
-		throw new InvalidAmountError("Amount must be greater than zero");
-	}
+type AccountRow = NonNullable<Awaited<ReturnType<AccountsRepository["findById"]>>>;
+
+export type AccountView = {
+	id: string;
+	userId: string | null;
+	kind: AccountRow["kind"];
+	currency: string;
+	balance: bigint;
+	version: bigint;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type TransactionView = {
+	id: string;
+	type: "deposit" | "withdraw" | "transfer_in" | "transfer_out" | "reversal_in" | "reversal_out";
+	amount: bigint;
+	createdAt: string;
+	counterpartyUserId?: string;
+	counterpartyName?: string;
+};
+
+export type ReversalView = {
+	transactionId: string;
+	reversalOfTransactionId: string;
+	amount: bigint;
+	currency: string;
+	status: "posted";
+};
+
+type JournalEntry = {
+	accountId: string;
+	type: "debit" | "credit";
+	amount: bigint;
+};
+
+type BalanceUpdate = {
+	id: string;
+	nextBalance: bigint;
+	version: bigint;
+};
+
+function toAccountView(account: AccountRow): AccountView {
+	return {
+		id: account.id,
+		userId: account.userId,
+		kind: account.kind,
+		currency: account.currency,
+		balance: account.balance,
+		version: account.version,
+		createdAt: account.createdAt.toISOString(),
+		updatedAt: account.updatedAt.toISOString(),
+	};
 }
 
-export function calculateNewBalance(currentBalance: number, amount: number, direction: 1 | -1) {
-	return currentBalance + direction * amount;
-}
+function isUniqueViolation(error: unknown) {
+	const pending = [error];
+	const seen = new Set<unknown>();
 
-export function assertSufficientBalance(accountId: string, newBalance: number) {
-	if (newBalance < 0) {
-		throw new InsufficientBalanceError(`Account ${accountId} has insufficient balance`);
+	while (pending.length > 0) {
+		const current = pending.pop();
+		if (!current || typeof current !== "object" || seen.has(current)) continue;
+
+		seen.add(current);
+
+		if ("code" in current && current.code === "23505") return true;
+		if ("cause" in current) pending.push(current.cause);
 	}
+
+	return false;
 }
 
 async function updateBalanceOrThrow(
 	accountsRepository: AccountsRepository,
 	accountId: string,
-	newBalance: number,
-	expectedVersion: number,
+	newBalance: bigint,
+	expectedVersion: bigint,
 ) {
 	const updated = await accountsRepository.updateBalanceWithVersion(accountId, newBalance, expectedVersion);
 
@@ -46,29 +111,135 @@ async function updateBalanceOrThrow(
 	return updated;
 }
 
+async function applyBalanceUpdates(accountsRepository: AccountsRepository, updates: BalanceUpdate[]) {
+	const ordered = [...updates].sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+	const updated = new Map<string, AccountRow>();
+
+	for (const update of ordered) {
+		updated.set(update.id, await updateBalanceOrThrow(accountsRepository, update.id, update.nextBalance, update.version));
+	}
+
+	return updated;
+}
+
+function outboxPayload(params: {
+	transactionId: string;
+	type: string;
+	amount: bigint;
+	currency: string;
+	principalId: string;
+	requestId: string;
+	reversalOfTransactionId: string | null;
+}) {
+	return JSON.stringify({
+		transactionId: params.transactionId,
+		type: params.type,
+		amount: params.amount.toString(),
+		currency: params.currency,
+		status: "posted",
+		principalId: params.principalId,
+		requestId: params.requestId,
+		reversalOfTransactionId: params.reversalOfTransactionId,
+	});
+}
+
+async function postJournal(
+	tx: DbClient,
+	params: {
+		type: "deposit" | "withdraw" | "transfer" | "reversal";
+		amount: bigint;
+		currency: string;
+		requestId: string;
+		idempotencyKey: string | null;
+		principalId: string;
+		fromAccountId: string;
+		toAccountId: string;
+		reversalOfTransactionId: string | null;
+		entries: JournalEntry[];
+		balanceUpdates: BalanceUpdate[];
+	},
+) {
+	const ledgerRepository = new LedgerRepository(tx);
+	const transaction = await ledgerRepository.insertTransaction({
+		type: params.type,
+		status: "pending",
+		amount: params.amount,
+		currency: params.currency,
+		requestId: params.requestId,
+		idempotencyKey: params.idempotencyKey,
+		principalId: params.principalId,
+		fromAccountId: params.fromAccountId,
+		toAccountId: params.toAccountId,
+		reversalOfTransactionId: params.reversalOfTransactionId,
+	});
+
+	await ledgerRepository.insertEntries(
+		params.entries.map((entry) => ({
+			transactionId: transaction.id,
+			accountId: entry.accountId,
+			type: entry.type,
+			amount: entry.amount,
+			currency: params.currency,
+		})),
+	);
+
+	const updated = await applyBalanceUpdates(new AccountsRepository(tx), params.balanceUpdates);
+
+	await new OutboxRepository(tx).insert({
+		aggregateId: transaction.id,
+		eventType: "transaction.posted",
+		payload: outboxPayload({
+			transactionId: transaction.id,
+			type: params.type,
+			amount: params.amount,
+			currency: params.currency,
+			principalId: params.principalId,
+			requestId: params.requestId,
+			reversalOfTransactionId: params.reversalOfTransactionId,
+		}),
+	});
+
+	const posted = await ledgerRepository.updateStatus(transaction.id, "pending", "posted");
+
+	if (!posted) {
+		throw new InvalidTransitionError(`Transaction ${transaction.id} could not be posted`);
+	}
+
+	return { transactionId: transaction.id, updated };
+}
+
 export async function listUsers(client: DbClient = db) {
 	return new UsersRepository(client).findAll();
 }
 
 type RecentEntryRow = Awaited<ReturnType<LedgerRepository["findRecentByAccountId"]>>[number];
 
-function toTransactionView(row: RecentEntryRow, accountId: string) {
+function toTransactionView(row: RecentEntryRow, accountId: string): TransactionView {
+	const base = {
+		id: row.entryId,
+		amount: row.amount,
+		createdAt: row.createdAt.toISOString(),
+	};
+
+	if (row.transactionType === "reversal") {
+		return {
+			...base,
+			type: row.entryType === "credit" ? "reversal_in" : "reversal_out",
+		};
+	}
+
 	if (row.transactionType !== "transfer") {
 		return {
-			id: row.entryId,
+			...base,
 			type: row.transactionType,
-			amount: row.amount,
-			createdAt: row.createdAt.toISOString(),
 		};
 	}
 
 	const isIncoming = row.toAccountId === accountId;
 
 	return {
-		id: row.entryId,
-		type: isIncoming ? ("transfer_in" as const) : ("transfer_out" as const),
-		amount: row.amount,
-		createdAt: row.createdAt.toISOString(),
+		...base,
+		type: isIncoming ? "transfer_in" : "transfer_out",
 		counterpartyUserId: (isIncoming ? row.fromUserId : row.toUserId) ?? undefined,
 		counterpartyName: (isIncoming ? row.fromUserName : row.toUserName) ?? undefined,
 	};
@@ -81,13 +252,10 @@ export async function getAccountSnapshot(userId: string, client: DbClient = db) 
 		throw new AccountNotFoundError(`Account not found for user ${userId}`);
 	}
 
-	const recentEntries = await new LedgerRepository(client).findRecentByAccountId(
-		account.id,
-		RECENT_TRANSACTIONS_LIMIT,
-	);
+	const recentEntries = await new LedgerRepository(client).findRecentByAccountId(account.id, RECENT_TRANSACTIONS_LIMIT);
 
 	return {
-		...account,
+		...toAccountView(account),
 		transactions: recentEntries.map((row) => toTransactionView(row, account.id)),
 	};
 }
@@ -110,7 +278,7 @@ async function withOptimisticLockRetry<T>(operation: () => Promise<T>): Promise<
 
 type DepositOrWithdrawParams = {
 	userId: string;
-	amount: number;
+	amount: bigint;
 	requestId: string;
 	idempotencyKey: string | null;
 };
@@ -118,55 +286,74 @@ type DepositOrWithdrawParams = {
 type MovementKind = "deposit" | "withdraw";
 
 async function applyMovement(tx: DbClient, params: DepositOrWithdrawParams, kind: MovementKind) {
-	const direction = kind === "deposit" ? 1 : -1;
 	const accountsRepository = new AccountsRepository(tx);
 	const account = await accountsRepository.findByUserId(params.userId);
 
-	if (!account) {
+	if (!account || account.kind !== "customer") {
 		throw new AccountNotFoundError(`Account not found for user ${params.userId}`);
 	}
 
-	const newBalance = calculateNewBalance(account.balance, params.amount, direction);
-	assertSufficientBalance(account.id, newBalance);
+	const settlement = await accountsRepository.findSettlement(account.currency);
 
-	const updatedAccount = await updateBalanceOrThrow(accountsRepository, account.id, newBalance, account.version);
+	if (!settlement) {
+		throw new SettlementAccountNotFoundError(`No settlement account for currency ${account.currency}`);
+	}
 
-	const ledgerRepository = new LedgerRepository(tx);
-	const transaction = await ledgerRepository.insertTransaction({
+	const customerEntryType = kind === "deposit" ? "credit" : "debit";
+	const settlementEntryType = kind === "deposit" ? "debit" : "credit";
+	const customerNext = account.balance + entryDelta(account.kind, customerEntryType, params.amount);
+	const settlementNext = settlement.balance + entryDelta(settlement.kind, settlementEntryType, params.amount);
+
+	assertSufficientBalance(account.id, customerNext);
+	assertSufficientBalance(settlement.id, settlementNext);
+
+	const { transactionId, updated } = await postJournal(tx, {
 		type: kind,
 		amount: params.amount,
+		currency: account.currency,
 		requestId: params.requestId,
 		idempotencyKey: params.idempotencyKey,
-		fromAccountId: kind === "withdraw" ? account.id : null,
-		toAccountId: kind === "deposit" ? account.id : null,
+		principalId: params.userId,
+		fromAccountId: kind === "deposit" ? settlement.id : account.id,
+		toAccountId: kind === "deposit" ? account.id : settlement.id,
+		reversalOfTransactionId: null,
+		entries: [
+			{ accountId: settlement.id, type: settlementEntryType, amount: params.amount },
+			{ accountId: account.id, type: customerEntryType, amount: params.amount },
+		],
+		balanceUpdates: [
+			{ id: account.id, nextBalance: customerNext, version: account.version },
+			{ id: settlement.id, nextBalance: settlementNext, version: settlement.version },
+		],
 	});
 
-	await ledgerRepository.insertEntries([
-		{
-			transactionId: transaction.id,
-			accountId: account.id,
-			type: kind === "deposit" ? "credit" : "debit",
-			amount: params.amount,
-		},
-	]);
+	const updatedCustomer = updated.get(account.id);
 
-	return updatedAccount;
+	if (!updatedCustomer) {
+		throw new OptimisticLockError(`Account ${account.id} was updated concurrently`);
+	}
+
+	return { transactionId, result: toAccountView(updatedCustomer) };
 }
 
 function runIdempotentOperation<T>(
+	principalId: string,
 	scope: string,
 	idempotencyKey: string | null,
 	requestPayload: unknown,
-	operation: (tx: DbClient) => Promise<T>,
+	operation: (tx: DbClient) => Promise<{ transactionId: string | null; result: T }>,
 	client: DbClient,
 ) {
-	return withOptimisticLockRetry(() => withIdempotency(scope, idempotencyKey, requestPayload, operation, client));
+	return withOptimisticLockRetry(() =>
+		withIdempotency(principalId, scope, idempotencyKey, requestPayload, operation, client),
+	);
 }
 
 export async function deposit(params: DepositOrWithdrawParams, client: DbClient = db) {
 	assertPositiveAmount(params.amount);
 
 	return runIdempotentOperation(
+		params.userId,
 		OperationKind.Deposit,
 		params.idempotencyKey,
 		{ userId: params.userId, amount: params.amount },
@@ -179,6 +366,7 @@ export async function withdraw(params: DepositOrWithdrawParams, client: DbClient
 	assertPositiveAmount(params.amount);
 
 	return runIdempotentOperation(
+		params.userId,
 		OperationKind.Withdraw,
 		params.idempotencyKey,
 		{ userId: params.userId, amount: params.amount },
@@ -190,7 +378,7 @@ export async function withdraw(params: DepositOrWithdrawParams, client: DbClient
 type TransferParams = {
 	fromUserId: string;
 	toUserId: string;
-	amount: number;
+	amount: bigint;
 	requestId: string;
 	idempotencyKey: string | null;
 };
@@ -202,57 +390,53 @@ async function applyTransfer(tx: DbClient, params: TransferParams) {
 		accountsRepository.findByUserId(params.toUserId),
 	]);
 
-	if (!fromAccount) {
+	if (!fromAccount || fromAccount.kind !== "customer") {
 		throw new AccountNotFoundError(`Account not found for user ${params.fromUserId}`);
 	}
 
-	if (!toAccount) {
+	if (!toAccount || toAccount.kind !== "customer") {
 		throw new AccountNotFoundError(`Account not found for user ${params.toUserId}`);
 	}
 
-	const newFromBalance = calculateNewBalance(fromAccount.balance, params.amount, -1);
-	assertSufficientBalance(fromAccount.id, newFromBalance);
+	if (fromAccount.currency !== toAccount.currency) {
+		throw new CurrencyMismatchError(
+			`Cannot transfer from ${fromAccount.currency} account ${fromAccount.id} to ${toAccount.currency} account ${toAccount.id}`,
+		);
+	}
 
-	const newToBalance = calculateNewBalance(toAccount.balance, params.amount, 1);
+	const fromNext = fromAccount.balance + entryDelta("customer", "debit", params.amount);
+	const toNext = toAccount.balance + entryDelta("customer", "credit", params.amount);
 
-	// Update accounts in a stable order (lowest id first) so concurrent transfers between
-	// the same two accounts in opposite directions can't deadlock on row locks.
-	const [firstAccount, firstBalance, secondAccount, secondBalance] =
-		fromAccount.id < toAccount.id
-			? [fromAccount, newFromBalance, toAccount, newToBalance]
-			: [toAccount, newToBalance, fromAccount, newFromBalance];
+	assertSufficientBalance(fromAccount.id, fromNext);
+	assertSufficientBalance(toAccount.id, toNext);
 
-	const firstUpdated = await updateBalanceOrThrow(
-		accountsRepository,
-		firstAccount.id,
-		firstBalance,
-		firstAccount.version,
-	);
-	const secondUpdated = await updateBalanceOrThrow(
-		accountsRepository,
-		secondAccount.id,
-		secondBalance,
-		secondAccount.version,
-	);
-
-	const updatedFromAccount = firstAccount.id === fromAccount.id ? firstUpdated : secondUpdated;
-
-	const ledgerRepository = new LedgerRepository(tx);
-	const transaction = await ledgerRepository.insertTransaction({
+	const { transactionId, updated } = await postJournal(tx, {
 		type: "transfer",
 		amount: params.amount,
+		currency: fromAccount.currency,
 		requestId: params.requestId,
 		idempotencyKey: params.idempotencyKey,
+		principalId: params.fromUserId,
 		fromAccountId: fromAccount.id,
 		toAccountId: toAccount.id,
+		reversalOfTransactionId: null,
+		entries: [
+			{ accountId: fromAccount.id, type: "debit", amount: params.amount },
+			{ accountId: toAccount.id, type: "credit", amount: params.amount },
+		],
+		balanceUpdates: [
+			{ id: fromAccount.id, nextBalance: fromNext, version: fromAccount.version },
+			{ id: toAccount.id, nextBalance: toNext, version: toAccount.version },
+		],
 	});
 
-	await ledgerRepository.insertEntries([
-		{ transactionId: transaction.id, accountId: fromAccount.id, type: "debit", amount: params.amount },
-		{ transactionId: transaction.id, accountId: toAccount.id, type: "credit", amount: params.amount },
-	]);
+	const updatedFrom = updated.get(fromAccount.id);
 
-	return updatedFromAccount;
+	if (!updatedFrom) {
+		throw new OptimisticLockError(`Account ${fromAccount.id} was updated concurrently`);
+	}
+
+	return { transactionId, result: toAccountView(updatedFrom) };
 }
 
 export async function transfer(params: TransferParams, client: DbClient = db) {
@@ -263,10 +447,137 @@ export async function transfer(params: TransferParams, client: DbClient = db) {
 	}
 
 	return runIdempotentOperation(
+		params.fromUserId,
 		OperationKind.Transfer,
 		params.idempotencyKey,
 		{ fromUserId: params.fromUserId, toUserId: params.toUserId, amount: params.amount },
 		(tx) => applyTransfer(tx, params),
+		client,
+	);
+}
+
+type ReverseParams = {
+	transactionId: string;
+	requestId: string;
+	idempotencyKey: string | null;
+};
+
+async function applyReversal(tx: DbClient, params: ReverseParams) {
+	const ledgerRepository = new LedgerRepository(tx);
+	const original = await ledgerRepository.lockById(params.transactionId);
+
+	if (!original) {
+		throw new TransactionNotFoundError(`Transaction ${params.transactionId} was not found`);
+	}
+
+	if (original.type === "reversal" || original.reversalOfTransactionId) {
+		throw new CannotReverseReversalError(`Transaction ${original.id} is a reversal and cannot be reversed`);
+	}
+
+	if (original.status === "reversed") {
+		throw new AlreadyReversedError(`Transaction ${original.id} was already reversed`);
+	}
+
+	if (original.status !== "posted") {
+		throw new InvalidTransitionError(`Transaction ${original.id} cannot be reversed from status ${original.status}`);
+	}
+
+	const originalEntries = await ledgerRepository.findEntriesByTransactionId(original.id);
+	const accountsRepository = new AccountsRepository(tx);
+	const accountRows = await accountsRepository.findByIds([...new Set(originalEntries.map((entry) => entry.accountId))]);
+	const accountsById = new Map(accountRows.map((account) => [account.id, account]));
+	const deltas = new Map<string, bigint>();
+	const reversalEntries: JournalEntry[] = originalEntries.map((entry) => {
+		const account = accountsById.get(entry.accountId);
+
+		if (!account) {
+			throw new AccountNotFoundError(`Account ${entry.accountId} was not found`);
+		}
+
+		if (account.currency !== original.currency) {
+			throw new CurrencyMismatchError(`Reversal currency ${original.currency} does not match account ${account.id}`);
+		}
+
+		const type = entry.type === "debit" ? "credit" : "debit";
+		deltas.set(entry.accountId, (deltas.get(entry.accountId) ?? 0n) + entryDelta(account.kind, type, entry.amount));
+
+		return { accountId: entry.accountId, type, amount: entry.amount };
+	});
+
+	const balanceUpdates: BalanceUpdate[] = [];
+
+	for (const [accountId, delta] of deltas) {
+		const account = accountsById.get(accountId);
+
+		if (!account) {
+			throw new AccountNotFoundError(`Account ${accountId} was not found`);
+		}
+
+		const nextBalance = account.balance + delta;
+		assertSufficientBalance(accountId, nextBalance);
+		balanceUpdates.push({ id: accountId, nextBalance, version: account.version });
+	}
+
+	const debit = reversalEntries.find((entry) => entry.type === "debit");
+	const credit = reversalEntries.find((entry) => entry.type === "credit");
+
+	if (!debit || !credit) {
+		throw new InvalidTransitionError(`Transaction ${original.id} cannot be reversed without a debit and a credit`);
+	}
+
+	try {
+		const posted = await postJournal(tx, {
+			type: "reversal",
+			amount: original.amount,
+			currency: original.currency,
+			requestId: params.requestId,
+			idempotencyKey: params.idempotencyKey,
+			principalId: original.principalId,
+			fromAccountId: debit.accountId,
+			toAccountId: credit.accountId,
+			reversalOfTransactionId: original.id,
+			entries: reversalEntries,
+			balanceUpdates,
+		});
+
+		const reversed = await ledgerRepository.updateStatus(original.id, "posted", "reversed");
+
+		if (!reversed) {
+			throw new AlreadyReversedError(`Transaction ${original.id} was already reversed`);
+		}
+
+		return {
+			transactionId: posted.transactionId,
+			result: {
+				transactionId: posted.transactionId,
+				reversalOfTransactionId: original.id,
+				amount: original.amount,
+				currency: original.currency,
+				status: "posted" as const,
+			},
+		};
+	} catch (error) {
+		if (isUniqueViolation(error)) {
+			throw new AlreadyReversedError(`Transaction ${original.id} was already reversed`);
+		}
+
+		throw error;
+	}
+}
+
+export async function reverseTransaction(params: ReverseParams, client: DbClient = db) {
+	const existing = await new LedgerRepository(client).findById(params.transactionId);
+
+	if (!existing) {
+		throw new TransactionNotFoundError(`Transaction ${params.transactionId} was not found`);
+	}
+
+	return runIdempotentOperation(
+		existing.principalId,
+		REVERSAL_SCOPE,
+		params.idempotencyKey,
+		{ transactionId: params.transactionId },
+		(tx) => applyReversal(tx, params),
 		client,
 	);
 }

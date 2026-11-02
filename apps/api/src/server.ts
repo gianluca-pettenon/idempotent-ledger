@@ -3,6 +3,7 @@ import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
 import { accountsRoutes } from "@api/routes/accounts.routes";
 import { healthRoutes } from "@api/routes/health.routes";
+import { reversalsRoutes } from "@api/routes/reversals.routes";
 import { transfersRoutes } from "@api/routes/transfers.routes";
 import { usersRoutes } from "@api/routes/users.routes";
 
@@ -20,7 +21,8 @@ const app = new Elysia({ prefix: "/api" })
 	.use(healthRoutes)
 	.use(usersRoutes)
 	.use(accountsRoutes)
-	.use(transfersRoutes);
+	.use(transfersRoutes)
+	.use(reversalsRoutes);
 
 app.listen(port);
 

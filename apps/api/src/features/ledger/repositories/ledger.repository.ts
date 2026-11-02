@@ -5,26 +5,35 @@ import {
 	transactions,
 	type DbClient,
 	type entryType,
+	type transactionStatus,
 	type transactionType,
 	users,
 } from "@banking-ledger/db";
+import { and, desc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { desc, eq } from "drizzle-orm";
+
+type TransactionType = (typeof transactionType.enumValues)[number];
+type TransactionStatus = (typeof transactionStatus.enumValues)[number];
 
 type NewTransaction = {
-	type: (typeof transactionType.enumValues)[number];
-	amount: number;
+	type: TransactionType;
+	status: TransactionStatus;
+	amount: bigint;
+	currency: string;
 	requestId: string;
 	idempotencyKey: string | null;
-	fromAccountId: string | null;
-	toAccountId: string | null;
+	principalId: string;
+	fromAccountId: string;
+	toAccountId: string;
+	reversalOfTransactionId: string | null;
 };
 
 type NewEntry = {
 	transactionId: string;
 	accountId: string;
 	type: (typeof entryType.enumValues)[number];
-	amount: number;
+	amount: bigint;
+	currency: string;
 };
 
 const fromAccounts = alias(accounts, "from_accounts");
@@ -45,10 +54,37 @@ export class LedgerRepository {
 		return this.client.insert(entriesTable).values(newEntries).returning();
 	}
 
+	async findById(id: string) {
+		const [transaction] = await this.client.select().from(transactions).where(eq(transactions.id, id));
+
+		return transaction;
+	}
+
+	async lockById(id: string) {
+		const [transaction] = await this.client.select().from(transactions).where(eq(transactions.id, id)).for("update");
+
+		return transaction;
+	}
+
+	async findEntriesByTransactionId(transactionId: string) {
+		return this.client.select().from(entriesTable).where(eq(entriesTable.transactionId, transactionId));
+	}
+
+	async updateStatus(id: string, from: TransactionStatus, to: TransactionStatus) {
+		const [transaction] = await this.client
+			.update(transactions)
+			.set({ status: to })
+			.where(and(eq(transactions.id, id), eq(transactions.status, from)))
+			.returning();
+
+		return transaction;
+	}
+
 	async findRecentByAccountId(accountId: string, limit: number) {
 		return this.client
 			.select({
 				entryId: entriesTable.id,
+				entryType: entriesTable.type,
 				amount: entriesTable.amount,
 				createdAt: entriesTable.createdAt,
 				transactionType: transactions.type,

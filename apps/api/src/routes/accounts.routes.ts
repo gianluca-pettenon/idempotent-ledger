@@ -1,6 +1,8 @@
 import { TransactionKind } from "@banking-ledger/shared";
 import { Elysia, t } from "elysia";
 import { deposit, getAccountSnapshot, withdraw } from "@api/features/ledger";
+import { parseJsonAmount } from "@api/features/ledger/money";
+import { toPublicJson } from "@api/features/ledger/public-json";
 import { readRequestMeta } from "@api/request-meta";
 
 const transactionBodySchema = t.Object({
@@ -13,7 +15,7 @@ export const accountsRoutes = new Elysia()
 		"/accounts/:userId",
 		async ({ params }) => ({
 			success: true,
-			account: await getAccountSnapshot(params.userId),
+			account: toPublicJson(await getAccountSnapshot(params.userId)),
 		}),
 		{
 			detail: {
@@ -30,12 +32,12 @@ export const accountsRoutes = new Elysia()
 
 			const { result: account, outcome } = await applyMovement({
 				userId: params.userId,
-				amount: body.amount,
+				amount: parseJsonAmount(body.amount),
 				requestId,
 				idempotencyKey,
 			});
 
-			return { success: true, account, meta: { outcome } };
+			return { success: true, account: toPublicJson(account), meta: { outcome } };
 		},
 		{
 			body: transactionBodySchema,

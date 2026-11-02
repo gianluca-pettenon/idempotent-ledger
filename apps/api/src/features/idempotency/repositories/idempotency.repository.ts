@@ -2,6 +2,7 @@ import { db, type DbClient, idempotencyKeys } from "@banking-ledger/db";
 import { and, eq } from "drizzle-orm";
 
 type ReserveParams = {
+	principalId: string;
 	scope: string;
 	key: string;
 	requestHash: string;
@@ -19,17 +20,25 @@ export class IdempotencyRepository {
 		const [reserved] = await this.client
 			.insert(idempotencyKeys)
 			.values(params)
-			.onConflictDoNothing({ target: [idempotencyKeys.scope, idempotencyKeys.key] })
+			.onConflictDoNothing({
+				target: [idempotencyKeys.principalId, idempotencyKeys.scope, idempotencyKeys.key],
+			})
 			.returning();
 
 		return reserved;
 	}
 
-	async findByScopeAndKey(scope: string, key: string) {
+	async findByPrincipalScopeAndKey(principalId: string, scope: string, key: string) {
 		const [record] = await this.client
 			.select()
 			.from(idempotencyKeys)
-			.where(and(eq(idempotencyKeys.scope, scope), eq(idempotencyKeys.key, key)));
+			.where(
+				and(
+					eq(idempotencyKeys.principalId, principalId),
+					eq(idempotencyKeys.scope, scope),
+					eq(idempotencyKeys.key, key),
+				),
+			);
 
 		return record;
 	}

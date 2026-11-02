@@ -1,0 +1,815 @@
+{
+  "id": "675a1aec-2199-42d5-8c0b-edbf45a7cc8c",
+  "prevId": "92062205-30bb-4b46-bed6-d4e6a1f43cb4",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.accounts": {
+      "name": "accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuidv7()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "account_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'customer'"
+        },
+        "currency": {
+          "name": "currency",
+          "type": "varchar(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
+        "balance": {
+          "name": "balance",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "version": {
+          "name": "version",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "IDX_ACCOUNTS_USER_ID": {
+          "name": "IDX_ACCOUNTS_USER_ID",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "IDX_ACCOUNTS_SETTLEMENT_CURRENCY": {
+          "name": "IDX_ACCOUNTS_SETTLEMENT_CURRENCY",
+          "columns": [
+            {
+              "expression": "currency",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"accounts\".\"kind\" = 'settlement'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "FK_ACCOUNTS_USER_ID": {
+          "name": "FK_ACCOUNTS_USER_ID",
+          "tableFrom": "accounts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "accounts_balance_check": {
+          "name": "accounts_balance_check",
+          "value": "\"accounts\".\"balance\" >= 0"
+        },
+        "accounts_currency_check": {
+          "name": "accounts_currency_check",
+          "value": "\"accounts\".\"currency\" ~ '^[A-Z]{3}$'"
+        },
+        "accounts_kind_owner_check": {
+          "name": "accounts_kind_owner_check",
+          "value": "(\"accounts\".\"kind\" = 'customer' AND \"accounts\".\"user_id\" IS NOT NULL) OR (\"accounts\".\"kind\" = 'settlement' AND \"accounts\".\"user_id\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.entries": {
+      "name": "entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuidv7()"
+        },
+        "transaction_id": {
+          "name": "transaction_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "entry_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "varchar(3)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "IDX_ENTRIES_TRANSACTION_ID": {
+          "name": "IDX_ENTRIES_TRANSACTION_ID",
+          "columns": [
+            {
+              "expression": "transaction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "IDX_ENTRIES_ACCOUNT_ID_CREATED_AT": {
+          "name": "IDX_ENTRIES_ACCOUNT_ID_CREATED_AT",
+          "columns": [
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "FK_ENTRIES_TRANSACTION_ID": {
+          "name": "FK_ENTRIES_TRANSACTION_ID",
+          "tableFrom": "entries",
+          "tableTo": "transactions",
+          "columnsFrom": [
+            "transaction_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "FK_ENTRIES_ACCOUNT_ID": {
+          "name": "FK_ENTRIES_ACCOUNT_ID",
+          "tableFrom": "entries",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "entries_amount_check": {
+          "name": "entries_amount_check",
+          "value": "\"entries\".\"amount\" > 0"
+        },
+        "entries_currency_check": {
+          "name": "entries_currency_check",
+          "value": "\"entries\".\"currency\" ~ '^[A-Z]{3}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.idempotency_keys": {
+      "name": "idempotency_keys",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuidv7()"
+        },
+        "principal_id": {
+          "name": "principal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "response": {
+          "name": "response",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transaction_id": {
+          "name": "transaction_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "legacy_unlinked": {
+          "name": "legacy_unlinked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "IDX_IDEMPOTENCY_KEYS_PRINCIPAL_SCOPE_KEY": {
+          "name": "IDX_IDEMPOTENCY_KEYS_PRINCIPAL_SCOPE_KEY",
+          "columns": [
+            {
+              "expression": "principal_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "scope",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "IDX_IDEMPOTENCY_KEYS_TRANSACTION_ID": {
+          "name": "IDX_IDEMPOTENCY_KEYS_TRANSACTION_ID",
+          "columns": [
+            {
+              "expression": "transaction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "FK_IDEMPOTENCY_KEYS_TRANSACTION_ID": {
+          "name": "FK_IDEMPOTENCY_KEYS_TRANSACTION_ID",
+          "tableFrom": "idempotency_keys",
+          "tableTo": "transactions",
+          "columnsFrom": [
+            "transaction_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "idempotency_financial_transaction_check": {
+          "name": "idempotency_financial_transaction_check",
+          "value": "\"idempotency_keys\".\"scope\" NOT IN ('deposit', 'withdraw', 'transfer', 'reversal') OR \"idempotency_keys\".\"completed_at\" IS NULL OR \"idempotency_keys\".\"transaction_id\" IS NOT NULL OR \"idempotency_keys\".\"legacy_unlinked\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.outbox_events": {
+      "name": "outbox_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuidv7()"
+        },
+        "aggregate_id": {
+          "name": "aggregate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "IDX_OUTBOX_AGGREGATE_ID": {
+          "name": "IDX_OUTBOX_AGGREGATE_ID",
+          "columns": [
+            {
+              "expression": "aggregate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "IDX_OUTBOX_UNPUBLISHED": {
+          "name": "IDX_OUTBOX_UNPUBLISHED",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"outbox_events\".\"published_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "FK_OUTBOX_AGGREGATE_ID": {
+          "name": "FK_OUTBOX_AGGREGATE_ID",
+          "tableFrom": "outbox_events",
+          "tableTo": "transactions",
+          "columnsFrom": [
+            "aggregate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.transactions": {
+      "name": "transactions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuidv7()"
+        },
+        "type": {
+          "name": "type",
+          "type": "transaction_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "transaction_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "varchar(3)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "principal_id": {
+          "name": "principal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_account_id": {
+          "name": "from_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_account_id": {
+          "name": "to_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reversal_of_transaction_id": {
+          "name": "reversal_of_transaction_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "IDX_TRANSACTIONS_REQUEST_ID": {
+          "name": "IDX_TRANSACTIONS_REQUEST_ID",
+          "columns": [
+            {
+              "expression": "request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "IDX_TRANSACTIONS_PRINCIPAL_ID": {
+          "name": "IDX_TRANSACTIONS_PRINCIPAL_ID",
+          "columns": [
+            {
+              "expression": "principal_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "IDX_TRANSACTIONS_FROM_ACCOUNT_ID": {
+          "name": "IDX_TRANSACTIONS_FROM_ACCOUNT_ID",
+          "columns": [
+            {
+              "expression": "from_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "IDX_TRANSACTIONS_TO_ACCOUNT_ID": {
+          "name": "IDX_TRANSACTIONS_TO_ACCOUNT_ID",
+          "columns": [
+            {
+              "expression": "to_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "IDX_TRANSACTIONS_REVERSAL_OF": {
+          "name": "IDX_TRANSACTIONS_REVERSAL_OF",
+          "columns": [
+            {
+              "expression": "reversal_of_transaction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "FK_TRANSACTIONS_FROM_ACCOUNT_ID": {
+          "name": "FK_TRANSACTIONS_FROM_ACCOUNT_ID",
+          "tableFrom": "transactions",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "from_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "FK_TRANSACTIONS_TO_ACCOUNT_ID": {
+          "name": "FK_TRANSACTIONS_TO_ACCOUNT_ID",
+          "tableFrom": "transactions",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "to_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "FK_TRANSACTIONS_PRINCIPAL_ID": {
+          "name": "FK_TRANSACTIONS_PRINCIPAL_ID",
+          "tableFrom": "transactions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "principal_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "FK_TRANSACTIONS_REVERSAL_OF": {
+          "name": "FK_TRANSACTIONS_REVERSAL_OF",
+          "tableFrom": "transactions",
+          "tableTo": "transactions",
+          "columnsFrom": [
+            "reversal_of_transaction_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "transactions_amount_check": {
+          "name": "transactions_amount_check",
+          "value": "\"transactions\".\"amount\" > 0"
+        },
+        "transactions_currency_check": {
+          "name": "transactions_currency_check",
+          "value": "\"transactions\".\"currency\" ~ '^[A-Z]{3}$'"
+        },
+        "transactions_shape_check": {
+          "name": "transactions_shape_check",
+          "value": "(\n\t\t\t\t\"transactions\".\"reversal_of_transaction_id\" IS NULL\n\t\t\t\tAND \"transactions\".\"from_account_id\" IS NOT NULL\n\t\t\t\tAND \"transactions\".\"to_account_id\" IS NOT NULL\n\t\t\t\tAND (\n\t\t\t\t\t\"transactions\".\"type\" = 'deposit'\n\t\t\t\t\tOR \"transactions\".\"type\" = 'withdraw'\n\t\t\t\t\tOR (\"transactions\".\"type\" = 'transfer' AND \"transactions\".\"from_account_id\" <> \"transactions\".\"to_account_id\")\n\t\t\t\t)\n\t\t\t) OR (\n\t\t\t\t\"transactions\".\"reversal_of_transaction_id\" IS NOT NULL\n\t\t\t\tAND \"transactions\".\"from_account_id\" IS NOT NULL\n\t\t\t\tAND \"transactions\".\"to_account_id\" IS NOT NULL\n\t\t\t)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuidv7()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.account_kind": {
+      "name": "account_kind",
+      "schema": "public",
+      "values": [
+        "customer",
+        "settlement"
+      ]
+    },
+    "public.entry_type": {
+      "name": "entry_type",
+      "schema": "public",
+      "values": [
+        "debit",
+        "credit"
+      ]
+    },
+    "public.transaction_status": {
+      "name": "transaction_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "posted",
+        "failed",
+        "reversed"
+      ]
+    },
+    "public.transaction_type": {
+      "name": "transaction_type",
+      "schema": "public",
+      "values": [
+        "deposit",
+        "withdraw",
+        "transfer",
+        "reversal"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
