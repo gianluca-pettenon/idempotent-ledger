@@ -11,10 +11,7 @@ export const store = KurrentDBClient.connectionString(Bun.env.KURRENTDB_URL as s
 
 const USERS_STREAM = "users";
 const DEFAULT_USERS = ["User A", "User B", "User C", "User D"];
-const RECENT_TRANSACTIONS = 20;
 const MAX_ATTEMPTS = 20;
-
-export type User = { id: string; name: string };
 
 type AccountEvent =
 	| { type: "AccountOpened"; data: Record<string, never> }
@@ -23,9 +20,7 @@ type AccountEvent =
 	| { type: "TransferSent"; data: { transferId: string; toUserId: string; amount: number } }
 	| { type: "TransferReceived"; data: { transferId: string; fromUserId: string; amount: number } };
 
-type RecordedAccountEvent = AccountEvent & { id: string; created: Date };
-
-type Account = { userId: string; revision: bigint; balance: number; events: RecordedAccountEvent[] };
+type Account = { userId: string; revision: bigint; balance: number };
 
 type Outcome = "processed" | "duplicate";
 
@@ -45,11 +40,11 @@ export class LedgerError extends Error {
 const accountStream = (userId: string) => `account-${userId}`;
 
 async function readStream<T>(streamName: string) {
-	const events: (T & { id: string; created: Date; revision: bigint })[] = [];
+	const events: (T & { revision: bigint })[] = [];
 
 	try {
 		for await (const { event } of store.readStream(streamName)) {
-			if (event) events.push({ ...(event as T), id: event.id, created: event.created, revision: event.revision });
+			if (event) events.push({ ...(event as T), revision: event.revision });
 		}
 	} catch (error) {
 		if (!(error instanceof StreamNotFoundError)) throw error;
@@ -80,7 +75,7 @@ async function loadAccount(userId: string): Promise<Account> {
 
 	if (!last) throw new LedgerError(404, `Account not found for user ${userId}`);
 
-	return { userId, revision: last.revision, balance: balanceOf(events), events };
+	return { userId, revision: last.revision, balance: balanceOf(events) };
 }
 
 function assertFunds(account: Account, amount: number) {
@@ -171,36 +166,6 @@ export function transfer(fromUserId: string, toUserId: string, amount: number, k
 			balance: from.balance - amount,
 		};
 	});
-}
-
-export async function listUsers(): Promise<User[]> {
-	return (await readStream<{ data: User }>(USERS_STREAM)).map(({ data }) => data);
-}
-
-export async function getAccount(userId: string) {
-	const [account, users] = await Promise.all([loadAccount(userId), listUsers()]);
-	const nameOf = (id: string) => users.find((user) => user.id === id)?.name;
-
-	const transactions = account.events
-		.filter((event) => event.type !== "AccountOpened")
-		.slice(-RECENT_TRANSACTIONS)
-		.reverse()
-		.map((event) => {
-			const base = { id: event.id, amount: event.data.amount, createdAt: event.created.toISOString() };
-
-			switch (event.type) {
-				case "MoneyDeposited":
-					return { ...base, type: "deposit" };
-				case "MoneyWithdrawn":
-					return { ...base, type: "withdraw" };
-				case "TransferSent":
-					return { ...base, type: "transfer_out", counterpartyUserId: event.data.toUserId, counterpartyName: nameOf(event.data.toUserId) };
-				case "TransferReceived":
-					return { ...base, type: "transfer_in", counterpartyUserId: event.data.fromUserId, counterpartyName: nameOf(event.data.fromUserId) };
-			}
-		});
-
-	return { balance: account.balance, transactions };
 }
 
 export async function openAccounts(names: string[], usersState: "any" | "no_stream" = "any") {

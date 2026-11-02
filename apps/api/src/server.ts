@@ -2,7 +2,8 @@ import { openapi } from "@elysia/openapi";
 import { cors } from "@elysiajs/cors";
 import { TransactionKind } from "@banking-ledger/shared";
 import { Elysia, t } from "elysia";
-import { deposit, getAccount, LedgerError, listUsers, seedDefaultUsers, transfer, withdraw } from "@api/ledger";
+import { deposit, LedgerError, seedDefaultUsers, transfer, withdraw } from "@api/ledger";
+import { getAccount, listUsers, migrate } from "@api/projection";
 
 const amount = t.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER });
 
@@ -28,7 +29,9 @@ export const app = new Elysia({ prefix: "/api" })
 	})
 	.get("/health", () => ({ ok: true }))
 	.get("/users", async () => ({ users: await listUsers() }))
-	.get("/accounts/:userId", async ({ params }) => ({ account: await getAccount(params.userId) }))
+	.get("/accounts/:userId", async ({ params }) => ({ account: await getAccount(params.userId) }), {
+		params: t.Object({ userId: t.String({ format: "uuid" }) }),
+	})
 	.post(
 		"/accounts/:userId/transactions",
 		async ({ body, params, headers }) => {
@@ -51,7 +54,7 @@ export const app = new Elysia({ prefix: "/api" })
 	);
 
 if (import.meta.main) {
-	await seedDefaultUsers();
+	await Promise.all([migrate(), seedDefaultUsers()]);
 	app.listen(Number(Bun.env.API_PORT));
 	console.log(`API ready at http://localhost:${Bun.env.API_PORT}`);
 }

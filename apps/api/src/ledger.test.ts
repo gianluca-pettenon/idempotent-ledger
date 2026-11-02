@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { openAccounts } from "@api/ledger";
+import { migrate, runProjector } from "@api/projection";
 import { app } from "@api/server";
 
 async function post(path: string, body: unknown, idempotencyKey?: string) {
@@ -14,11 +15,23 @@ async function post(path: string, body: unknown, idempotencyKey?: string) {
 	return { status: response.status, body: (await response.json()) as any };
 }
 
-async function account(userId: string) {
-	const response = await app.handle(new Request(`http://localhost/api/accounts/${userId}`));
+// The read model is eventually consistent: poll until the projector has applied the events.
+async function account(userId: string, balance: number) {
+	for (let attempt = 0; attempt < 100; attempt++) {
+		const response = await app.handle(new Request(`http://localhost/api/accounts/${userId}`));
+		const { account } = (await response.json()) as any;
 
-	return ((await response.json()) as any).account;
+		if (account?.balance === balance) return account;
+		await Bun.sleep(20);
+	}
+
+	throw new Error(`Read model never reached balance ${balance} for ${userId}`);
 }
+
+beforeAll(async () => {
+	await migrate();
+	runProjector();
+});
 
 const deposit = (userId: string, amount: number, key?: string) =>
 	post(`/accounts/${userId}/transactions`, { type: "deposit", amount }, key);
@@ -30,8 +43,7 @@ describe("ledger", () => {
 		expect((await deposit(alice.id, 100)).body).toEqual({ balance: 100, meta: { outcome: "processed" } });
 		expect((await post(`/accounts/${alice.id}/transactions`, { type: "withdraw", amount: 30 })).body.balance).toBe(70);
 
-		const statement = await account(alice.id);
-		expect(statement.balance).toBe(70);
+		const statement = await account(alice.id, 70);
 		expect(statement.transactions.map((tx: { type: string }) => tx.type)).toEqual(["withdraw", "deposit"]);
 	});
 
@@ -51,8 +63,7 @@ describe("ledger", () => {
 		const result = await post("/transfers", { fromUserId: from.id, toUserId: to.id, amount: 20 });
 		expect(result.body.balance).toBe(30);
 
-		const received = await account(to.id);
-		expect(received.balance).toBe(20);
+		const received = await account(to.id, 20);
 		expect(received.transactions[0]).toMatchObject({ type: "transfer_in", counterpartyName: "From" });
 
 		expect((await post("/transfers", { fromUserId: from.id, toUserId: to.id, amount: 31 })).status).toBe(422);
@@ -64,7 +75,7 @@ describe("ledger", () => {
 		const results = await Promise.all(Array.from({ length: 8 }, () => deposit(user.id, 10)));
 
 		expect(results.every((result) => result.body.meta.outcome === "processed")).toBe(true);
-		expect((await account(user.id)).balance).toBe(80);
+		await account(user.id, 80);
 	});
 
 	test("concurrent retries with the same key are applied once", async () => {
@@ -75,7 +86,7 @@ describe("ledger", () => {
 
 		expect(outcomes.filter((outcome) => outcome === "processed")).toHaveLength(1);
 		expect(results.every((result) => result.body.balance === 10)).toBe(true);
-		expect((await account(user.id)).balance).toBe(10);
+		await account(user.id, 10);
 		expect((await deposit(user.id, 99, key)).status).toBe(409);
 	});
 });

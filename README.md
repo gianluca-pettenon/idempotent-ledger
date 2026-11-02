@@ -1,8 +1,16 @@
 ## What this is
 
-An event-sourced ledger on [KurrentDB](https://www.kurrent.io/) (formerly EventStoreDB). There are no balance columns and no tables: every account is a stream of immutable events, and its balance is a fold over that stream. The event store is the only source of truth.
+An event-sourced ledger with CQRS: [KurrentDB](https://www.kurrent.io/) (formerly EventStoreDB) is the write side and the source of truth, and Postgres is the read side, projected from the events. This is the usual shape in banks: an event log plus a relational database for queries.
 
-It is not a payment rail or a bank core. It shows idempotent commands, optimistic concurrency, and atomic multi-account writes on top of an append-only log.
+It is not a payment rail or a bank core. It shows idempotent commands, optimistic concurrency, atomic multi-account writes, and a rebuildable read model.
+
+```text
+            commands                         queries
+POST ...  ──────────► API ──append──► KurrentDB        API ◄──SELECT── Postgres
+                       (decide on the                              ▲
+                        stream's fold)          projector ─────────┘
+                                         (subscribeToAll + checkpoint)
+```
 
 ## Model
 
@@ -23,7 +31,13 @@ idempotency-{userId}-{key}
 balance = Σ MoneyDeposited + Σ TransferReceived − Σ MoneyWithdrawn − Σ TransferSent
 ```
 
-Corrections are new events, never edits. The statement is the stream read back.
+Corrections are new events, never edits. Commands always decide on the stream itself, never on Postgres, so the invariants (no overdraft) hold even when the read model lags.
+
+## Read model
+
+The projector is a catch-up subscription on `$all` (filtered to `users` and `account-*`). For every event it updates `users`, `accounts.balance`, and `transactions` **and** saves the `$all` position to `checkpoint`, all in one SQL transaction. A crash or restart resumes from the checkpoint, so no event is skipped or applied twice.
+
+The read model is disposable: drop the tables and the projector rebuilds them from the events. Reads are eventually consistent, typically a few milliseconds behind the writes.
 
 ## A command
 
@@ -52,9 +66,11 @@ The idempotency scope is `(user, key)`, and the stored request includes the oper
 
 ```text
 apps/api/src/
-  ledger.ts        events, fold, commands, idempotency, event store client
+  ledger.ts        write side: events, fold, commands, idempotency (KurrentDB)
+  projection.ts    read side: projector and queries (Postgres)
+  schema.sql       read model tables
   server.ts        HTTP (Elysia): validation and routes
-  ledger.test.ts   end-to-end tests against a real KurrentDB
+  ledger.test.ts   end-to-end tests against real KurrentDB and Postgres
 ```
 
 Amounts are positive integers, validated at the HTTP boundary. The seeded users are created atomically on first start.
@@ -65,14 +81,21 @@ Amounts are positive integers, validated at the HTTP boundary. The seeded users 
 
 ```text
 KURRENTDB_URL=kurrentdb://localhost:2113?tls=false
+
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=banking-ledger
+POSTGRES_PORT=5432
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/banking-ledger
+
 PORT=3000
 API_PORT=3001
 ```
 
 ```bash
-make up      # KurrentDB, API and web
+make up      # KurrentDB, Postgres, projector, API and web
 make down    # stop everything
-make test    # API tests against a throwaway in-memory KurrentDB
+make test    # API tests against throwaway KurrentDB and Postgres
 ```
 
 Web on `localhost:3000`, API on `localhost:3001` (OpenAPI at `/api/docs`), KurrentDB UI on `localhost:2113`. In the web app, pick a user and run the concurrency lab: with an idempotency key four parallel deposits collapse into one; without it all four apply and none is lost.
@@ -85,10 +108,11 @@ covered
   idempotent effect per (user, key)
   optimistic concurrency without lost updates
   full audit trail: the stream is the history
+  exactly-once projection into Postgres (checkpoint in the same transaction)
 
 not covered
-  snapshots (every read replays the stream)
-  read-model projections, currencies/FX, authentication
+  snapshots (every command replays the stream)
+  read-your-writes on queries, currencies/FX, authentication
   external payment rails, distributed exactly-once, HA/DR
 ```
 
