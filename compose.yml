@@ -5,6 +5,7 @@ services:
     environment:
       KURRENTDB_INSECURE: "true"
       KURRENTDB_RUN_PROJECTIONS: None
+      KURRENTDB_ENABLE_ATOM_PUB_OVER_HTTP: "true"
     ports:
       - "2113:2113"
     volumes:
@@ -38,11 +39,12 @@ services:
       kurrentdb:
         condition: service_healthy
 
-  projector:
+  # One process per read-model view, each with its own checkpoint.
+  balances-projector: &projector
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["bun", "run", "apps/api/src/features/projection/services/projection.service.ts"]
+    command: ["bun", "run", "apps/api/src/features/projection/services/balances.projector.ts"]
     restart: unless-stopped
     environment:
       KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
@@ -52,6 +54,10 @@ services:
         condition: service_healthy
       mongodb:
         condition: service_healthy
+
+  statements-projector:
+    <<: *projector
+    command: ["bun", "run", "apps/api/src/features/projection/services/statements.projector.ts"]
 
   api:
     build:

@@ -1,5 +1,8 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { runProjector } from "@api/features/projection/services/projection.service";
+import { findCheckpoint } from "@api/features/projection/repositories/projection.repository";
+import { balancesProjector } from "@api/features/projection/services/balances.projector";
+import { ProjectorName, runProjector } from "@api/features/projection/services/projection.service";
+import { statementsProjector } from "@api/features/projection/services/statements.projector";
 import { seed } from "@api/seed";
 import { app } from "@api/server";
 
@@ -35,10 +38,11 @@ async function eventually<T>(read: () => Promise<T>, done: (value: T) => boolean
 	throw new Error("Read model never caught up");
 }
 
-const account = (accountId: string, balance: number) =>
+// Balances and statements come from separate projectors, so wait for both views when lines are expected.
+const account = (accountId: string, balance: number, lines?: number) =>
 	eventually(
 		() => get(`/accounts/${accountId}`),
-		(account) => account?.balance === balance,
+		(account) => account?.balance === balance && (lines === undefined || account.transactions.length === lines),
 	);
 
 async function openAccount(ownerName: string) {
@@ -48,7 +52,8 @@ async function openAccount(ownerName: string) {
 }
 
 beforeAll(() => {
-	runProjector();
+	runProjector(balancesProjector);
+	runProjector(statementsProjector);
 });
 
 const deposit = (accountId: string, amount: unknown, key?: string) => post(`/accounts/${accountId}/deposits`, { amount }, key);
@@ -72,7 +77,7 @@ describe("ledger", () => {
 
 		expect(result.status).toBe(201);
 		expect(result.body).toMatchObject({ balance: 0, outcome: "processed" });
-		expect((await account(result.body.accountId, 0)).transactions).toEqual([]);
+		expect((await account(result.body.accountId, 0, 0)).transactions).toEqual([]);
 		expect((await post("/accounts", { ownerName: " " })).status).toBe(422);
 	});
 
@@ -82,7 +87,7 @@ describe("ledger", () => {
 		expect((await deposit(alice, 100)).body).toEqual({ balance: 100, outcome: "processed" });
 		expect((await withdraw(alice, 30)).body.balance).toBe(70);
 
-		const statement = await account(alice, 70);
+		const statement = await account(alice, 70, 2);
 		expect(statement.transactions.map((tx: { type: string }) => tx.type)).toEqual(["withdraw", "deposit"]);
 	});
 
@@ -103,7 +108,7 @@ describe("ledger", () => {
 		const result = await post("/transfers", { fromAccountId: from, toAccountId: to, amount: 20 });
 		expect(result.body.balance).toBe(30);
 
-		const received = await account(to, 20);
+		const received = await account(to, 20, 1);
 		expect(received.transactions[0]).toMatchObject({ type: "transfer_in", counterpartyAccountId: from, counterpartyName: "From" });
 
 		expect((await post("/transfers", { fromAccountId: from, toAccountId: to, amount: 31 })).status).toBe(422);
@@ -117,6 +122,20 @@ describe("ledger", () => {
 
 		expect(results.every((result) => result.body.outcome === "processed")).toBe(true);
 		await account(user, 80);
+	});
+
+	test("each projector keeps its own checkpoint", async () => {
+		const user = await openAccount("Checkpoints");
+		await deposit(user, 5);
+		await account(user, 5);
+
+		const [balances, statements] = await Promise.all([
+			findCheckpoint(ProjectorName.Balances),
+			findCheckpoint(ProjectorName.Statements),
+		]);
+
+		expect(balances).toBeTruthy();
+		expect(statements).toBeTruthy();
 	});
 
 	test("concurrent retries with the same key are applied once", async () => {

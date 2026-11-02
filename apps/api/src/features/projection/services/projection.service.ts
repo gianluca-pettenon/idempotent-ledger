@@ -1,71 +1,37 @@
 import { type RecordedEvent, START, streamNameFilter } from "@kurrent/kurrentdb-client";
-import { type AccountEvent, delta } from "@api/features/ledger/domain/ledger.domain";
-import { EventType, type MovementType, StreamPrefix } from "@api/features/ledger/domain/ledger.events";
+import type { AccountEvent } from "@api/features/ledger/domain/ledger.domain";
+import { StreamPrefix } from "@api/features/ledger/domain/ledger.events";
 import { store } from "@api/features/ledger/repositories/ledger.repository";
 import {
-	applyMovement,
-	createIndexes,
 	findAccount,
 	findAccounts,
 	findCheckpoint,
-	findOwnerName,
 	findRecentTransactions,
-	insertAccount,
 	saveCheckpoint,
 } from "@api/features/projection/repositories/projection.repository";
 
 const RECENT_TRANSACTIONS = 20;
 
-export enum TransactionType {
-	Deposit = "deposit",
-	Withdraw = "withdraw",
-	TransferOut = "transfer_out",
-	TransferIn = "transfer_in",
+export enum ProjectorName {
+	Balances = "balances",
+	Statements = "statements",
 }
 
-const TRANSACTION_TYPES: Record<MovementType, TransactionType> = {
-	[EventType.MoneyDeposited]: TransactionType.Deposit,
-	[EventType.MoneyWithdrawn]: TransactionType.Withdraw,
-	[EventType.TransferSent]: TransactionType.TransferOut,
-	[EventType.TransferReceived]: TransactionType.TransferIn,
+// One read-model view. Each projector is its own process with its own checkpoint,
+// so it can fail, be rebuilt or be deployed without touching the others.
+export type Projector = {
+	name: ProjectorName;
+	setup?: () => Promise<unknown>;
+	project: (event: AccountEvent, recorded: RecordedEvent) => Promise<void>;
 };
-
-// The read model adds what the event does not carry: the balance, and the counterparty's name.
-async function project(event: RecordedEvent) {
-	const accountEvent = { type: event.type, data: event.data } as AccountEvent;
-	const version = Number(event.revision);
-
-	if (accountEvent.type === EventType.AccountCreated) {
-		const { accountId, ownerName } = accountEvent.data;
-
-		return insertAccount({ _id: accountId, ownerName, balance: 0, version });
-	}
-
-	const { data } = accountEvent;
-	const counterpartyAccountId = "counterpartyAccountId" in data ? data.counterpartyAccountId : undefined;
-
-	return applyMovement(
-		{
-			_id: event.id,
-			accountId: data.accountId,
-			type: TRANSACTION_TYPES[accountEvent.type],
-			amount: data.amount,
-			counterpartyAccountId,
-			counterpartyName: counterpartyAccountId && (await findOwnerName(counterpartyAccountId)),
-			createdAt: event.created,
-			version,
-		},
-		delta(accountEvent),
-	);
-}
 
 // Catch-up subscription on $all. Projection writes are idempotent, so a crash between an event
 // and its checkpoint only replays that event, harmlessly.
-export async function runProjector() {
-	await createIndexes();
+export async function runProjector({ name, setup, project }: Projector) {
+	await setup?.();
 
 	const subscription = store.subscribeToAll({
-		fromPosition: (await findCheckpoint()) ?? START,
+		fromPosition: (await findCheckpoint(name)) ?? START,
 		filter: streamNameFilter({ prefixes: [StreamPrefix.Account] }),
 	});
 
@@ -74,8 +40,8 @@ export async function runProjector() {
 			continue;
 		}
 
-		await project(event);
-		await saveCheckpoint(event.position);
+		await project({ type: event.type, data: event.data } as AccountEvent, event);
+		await saveCheckpoint(name, event.position);
 	}
 }
 
@@ -91,8 +57,4 @@ export async function getAccount(accountId: string) {
 	}
 
 	return { balance: account.balance, transactions: await findRecentTransactions(accountId, RECENT_TRANSACTIONS) };
-}
-
-if (import.meta.main) {
-	await runProjector();
 }

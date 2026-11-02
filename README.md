@@ -4,16 +4,17 @@ An event-sourced ledger with CQRS, split into processes that only meet through t
 
 - **KurrentDB** ([formerly EventStoreDB](https://www.kurrent.io/)) is the source of truth. Every fact, from opening an account to moving money, is an immutable event.
 - **MongoDB** holds the read model: one document per account and one per statement line, projected from the events.
-- **api** decides and appends. **projector** subscribes and writes MongoDB. **seed** opens the default accounts. Each scales and fails on its own: the API is stateless, so it can run many replicas, and optimistic concurrency keeps them consistent.
+- **api** decides and appends. **balances-projector** and **statements-projector** each subscribe and write their own view in MongoDB. **seed** opens the default accounts. Each scales and fails on its own: the API is stateless, so it can run many replicas, and optimistic concurrency keeps them consistent.
 
 It is not a payment rail or a bank core. It shows idempotent commands, optimistic concurrency, atomic multi-account writes, and a rebuildable read model.
 
 ```text
             commands                         queries
 POST ...  ──────────► api ──append──► KurrentDB        api ◄──find── MongoDB
-                       (decide on the                              ▲
-                        stream's fold)          projector ─────────┘
-                                         (subscribeToAll + checkpoint)
+                       (decide on the        │                     ▲  accounts
+                        stream's fold)       ├─► balances-projector ┤
+                                             └─► statements-projector  transactions
+                                       (each: subscribeToAll + its own checkpoint)
 ```
 
 ## Model
@@ -21,12 +22,12 @@ POST ...  ──────────► api ──append──► KurrentDB 
 One stream per account. The account exists once its stream holds `AccountCreated`. Every event carries the `accountId` it belongs to.
 
 ```text
-account-{accountId}    AccountCreated   { accountId, ownerName }
+Account-{accountId}    AccountCreated   { accountId, ownerName }
                        MoneyDeposited   { accountId, amount }
                        MoneyWithdrawn   { accountId, amount }
                        TransferSent     { accountId, transferId, counterpartyAccountId, amount }
                        TransferReceived { accountId, transferId, counterpartyAccountId, amount }
-idempotency-{accountId}-{key}
+Idempotency-{accountId}-{key}
                        RequestProcessed { request, response }
 ```
 
@@ -39,44 +40,45 @@ balance = Σ MoneyDeposited + Σ TransferReceived − Σ MoneyWithdrawn − Σ T
 Commands rebuild the account from the event store, never from MongoDB, so a lagging read model can never let a withdrawal or transfer through without funds. To keep that cheap, the account's state is snapshotted:
 
 ```text
-snapshot-account-{accountId}   AccountSnapshot { balance, revision }   (stream keeps only the latest)
+Snapshot-Account-{accountId}   AccountSnapshot { balance, revision }   (stream keeps only the latest)
 
-load = latest snapshot + events of account-{accountId} after its revision
+load = latest snapshot + events of Account-{accountId} after its revision
 ```
 
-Whenever a load replays `SNAPSHOT_EVERY` (100) events or more, it saves the state it just folded. A snapshot is a cache of immutable history: any reader may write one, it needs no lock, and deleting it only makes the next load slower. The `snapshot-` prefix keeps it out of the projector's `account-*` filter.
+Whenever a load replays `SNAPSHOT_EVERY` (100) events or more, it saves the state it just folded. A snapshot is a cache of immutable history: any reader may write one, it needs no lock, and deleting it only makes the next load slower. The `Snapshot-` prefix keeps it out of the projectors' `Account-*` filter.
 
 Corrections are new events, never edits. Commands always decide on the stream itself, never on MongoDB, so the invariants (no overdraft, no movement on an unknown account) hold even when the read model lags.
 
 ## Read model
 
-The projector is a catch-up subscription on `$all` (filtered to `account-*`). It adds what the events do not carry:
+Each view of the read model has its own projector: a separate process with its own catch-up subscription on `$all` (filtered to `Account-*`), its own checkpoint and its own collection. They all read the same events and never talk to each other.
 
 ```text
-AccountCreated  { accountId, ownerName }   ->  accounts     { _id, ownerName, balance: 0, version: 0 }
-MoneyDeposited  { accountId, amount }      ->  accounts     $inc balance, version = stream revision
-                                               transactions { _id: eventId, type, amount, ... }
-TransferSent    { ..., counterpartyAccountId } ->  transactions also get the counterparty's name
+balances-projector     AccountCreated  ->  accounts      { _id, ownerName, balance: 0, version: 0 }
+                       Money*/Transfer* ->  accounts      $inc balance, version = stream revision
+statements-projector   Money*/Transfer* ->  transactions  { _id: eventId, accountId, type, amount, counterpartyAccountId }
 ```
+
+So one view can fail, lag, be rebuilt or be deployed without touching the others, and a new view (a report, notifications) starts from the first event and gets the whole history. The counterparty's name is joined at read time (`$lookup` on `accounts`), so the statements projector depends on no other view.
 
 There are no multi-document transactions. Every write is idempotent instead: statement lines are upserted by event id, and the balance only moves when the event is newer than the account's `version`. The `$all` position is saved after each event, so a crash replays at most one event, harmlessly.
 
-The read model is disposable: drop the `banking-ledger` database and the projector rebuilds it from the events. Reads are eventually consistent, typically a few milliseconds behind the writes.
+The read model is disposable: drop a collection and its checkpoint, and its projector rebuilds it from the events. Reads are eventually consistent, typically a few milliseconds behind the writes, and the two views may briefly disagree with each other.
 
 ## A command
 
 ```text
 POST /transfers   Idempotency-Key: K
   |
-  1. read idempotency-{from}-{K}
+  1. read Idempotency-{from}-{K}
        exists, same request      -> replay saved result   (duplicate)
        exists, different request -> 409
   2. read both account streams, fold balances, remember each stream's revision
   3. decide: same account? insufficient funds?  -> 422
   4. one atomic multi-stream append:
-       account-{from}             expected revision = r1   TransferSent
-       account-{to}               expected revision = r2   TransferReceived
-       idempotency-{from}-{K}     expected = no stream     RequestProcessed
+       Account-{from}             expected revision = r1   TransferSent
+       Account-{to}               expected revision = r2   TransferReceived
+       Idempotency-{from}-{K}     expected = no stream     RequestProcessed
   5. wrong expected revision -> someone wrote first, go back to 1
 ```
 
@@ -103,7 +105,9 @@ apps/api/src/
       routes/ledger.routes.ts               POST /accounts, /accounts/:id/deposits, /withdrawals, /transfers
     projection/                    read side (MongoDB)
       repositories/projection.repository.ts every MongoDB query
-      services/projection.service.ts        projector (event -> documents) and queries
+      services/projection.service.ts        projector runner (subscription + checkpoint) and queries
+      services/balances.projector.ts        accounts view: owner and balance
+      services/statements.projector.ts      transactions view: one line per movement
       routes/projection.routes.ts           GET /accounts, /accounts/:id
 
 apps/api/tests/                    mirrors src/
@@ -132,7 +136,7 @@ API_PORT=3001
 ```
 
 ```bash
-make up      # KurrentDB, MongoDB, seed, projector, API and web
+make up      # KurrentDB, MongoDB, seed, projectors, API and web
 make down    # stop everything
 make test    # API tests against throwaway KurrentDB and MongoDB
 ```
@@ -153,7 +157,7 @@ covered
 not covered
   snapshot schema versioning (change the fold -> delete the snapshot streams)
   read-your-writes on queries, currencies/FX, authentication
-  external payment rails, HA/DR, more than one projector instance at a time
+  external payment rails, HA/DR, more than one instance of the same projector (persistent subscriptions would partition by account)
 ```
 
 ## Preview
