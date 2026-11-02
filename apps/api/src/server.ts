@@ -1,9 +1,9 @@
 import { openapi } from "@elysia/openapi";
 import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
-import { seedDefaultUsers } from "@api/features/ledger/ledger";
+import { seedDefaultUsers } from "@api/features/ledger/ledger.service";
 import { ledgerRoutes } from "@api/features/ledger/ledger.routes";
-import { migrate } from "@api/features/projection/projection";
+import { migrate } from "@api/features/projection/projection.repository";
 import { projectionRoutes } from "@api/features/projection/projection.routes";
 
 export const app = new Elysia({ prefix: "/api" })

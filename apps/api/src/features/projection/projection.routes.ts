@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { getAccount, listUsers } from "@api/features/projection/projection";
+import { getAccount, listUsers } from "@api/features/projection/projection.service";
 
 export const projectionRoutes = new Elysia()
 	.get("/users", async () => ({ users: await listUsers() }))

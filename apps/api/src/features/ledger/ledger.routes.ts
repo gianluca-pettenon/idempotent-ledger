@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { deposit, transfer, withdraw } from "@api/features/ledger/ledger";
+import { deposit, transfer, withdraw } from "@api/features/ledger/ledger.service";
 
 type Movement = { amount: number };
 type Transfer = { fromUserId: string; toUserId: string; amount: number };

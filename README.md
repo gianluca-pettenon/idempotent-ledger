@@ -69,14 +69,20 @@ apps/api/src/
   server.ts                    composes the features into one Elysia app
   features/
     ledger/                    write side (KurrentDB)
-      ledger.ts                events, fold, commands, idempotency
+      ledger.domain.ts         rules only: events, fold, decide* (no I/O)
+      ledger.repository.ts     KurrentDB reads and atomic appends
+      ledger.service.ts        commands: read, decide, append, retry, idempotency
       ledger.routes.ts         POST /accounts/:id/deposits, /withdrawals, /transfers
+      ledger.domain.test.ts    unit tests of the rules, no database
       ledger.test.ts           end-to-end tests against real KurrentDB and Postgres
     projection/                read side (Postgres)
-      projection.ts            projector and queries
+      projection.repository.ts every SQL statement
+      projection.service.ts    projector (event -> rows) and queries
       projection.routes.ts     GET /users, /accounts/:id
       schema.sql               read model tables
 ```
+
+Each layer only talks to the one below it: routes → service → domain and repository. Rules never touch I/O, and SQL never holds a rule.
 
 Validation lives in the domain, not in the routes: the amount must be a positive integer, and unknown accounts are a 404. Errors answer `{ message }` with their status. The seeded users are created atomically on first start.
 

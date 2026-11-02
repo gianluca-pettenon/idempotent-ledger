@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { openAccounts } from "@api/features/ledger/ledger";
-import { migrate, runProjector } from "@api/features/projection/projection";
+import { openAccounts } from "@api/features/ledger/ledger.service";
+import { migrate } from "@api/features/projection/projection.repository";
+import { runProjector } from "@api/features/projection/projection.service";
 import { app } from "@api/server";
 
 async function post(path: string, body: unknown, idempotencyKey?: string) {
