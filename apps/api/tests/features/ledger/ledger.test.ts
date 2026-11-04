@@ -38,7 +38,7 @@ async function readModel(accountId: string, balance: number, lines: number) {
 
 async function openAccount(ownerName: string) {
 	const accountId = Bun.randomUUIDv7();
-	const event = jsonEvent({ type: EventType.AccountCreated, data: { accountId, ownerName } });
+	const event = jsonEvent({ type: EventType.AccountCreated, data: { accountId, ownerName, balance: 0 } });
 	await store.appendToStream(`${ACCOUNT_STREAM}${accountId}`, event, { streamState: NO_STREAM });
 
 	return accountId;

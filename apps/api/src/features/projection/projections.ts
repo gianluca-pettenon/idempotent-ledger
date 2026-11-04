@@ -8,8 +8,8 @@ import {
 } from "@kurrent/kurrentdb-client";
 import type { AccountEvent } from "@api/features/ledger/ledger.events";
 import { ACCOUNT_STREAM, store } from "@api/features/ledger/ledger.store";
-import { balancesProjector } from "@api/features/projection/balances.projector";
-import { statementsProjector } from "@api/features/projection/statements.projector";
+import { balancesProjector } from "@api/features/projection/projectors/balances.projector";
+import { statementsProjector } from "@api/features/projection/projectors/statements.projector";
 
 export type Projector = {
 	name: string;
@@ -19,9 +19,7 @@ export type Projector = {
 
 const PROJECTORS = [balancesProjector, statementsProjector];
 
-async function subscribe({ name, setup, project }: Projector) {
-	await setup?.();
-
+async function createGroup(name: string) {
 	try {
 		await store.createPersistentSubscriptionToAll(name, persistentSubscriptionToAllSettingsFromDefaults({ startFrom: START }), {
 			filter: streamNameFilter({ prefixes: [ACCOUNT_STREAM] }),
@@ -31,7 +29,9 @@ async function subscribe({ name, setup, project }: Projector) {
 			throw error;
 		}
 	}
+}
 
+async function consume({ name, project }: Projector) {
 	const subscription = store.subscribeToPersistentSubscriptionToAll(name);
 
 	for await (const resolved of subscription) {
@@ -42,6 +42,11 @@ async function subscribe({ name, setup, project }: Projector) {
 			await subscription.nack(RETRY, String(error), resolved);
 		}
 	}
+}
+
+async function subscribe(projector: Projector) {
+	await Promise.all([projector.setup?.(), createGroup(projector.name)]);
+	await consume(projector);
 }
 
 export const startProjections = () => Promise.all(PROJECTORS.map(subscribe));

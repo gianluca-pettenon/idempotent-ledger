@@ -1,11 +1,11 @@
 import { openapi } from "@elysia/openapi";
 import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
-import { IDEMPOTENCY_KEY_HEADER, ledgerRoutes } from "@api/features/ledger/ledger.routes";
+import { ledgerRoutes } from "@api/features/ledger/ledger.routes";
 import { projectionRoutes } from "@api/features/projection/projection.routes";
 
 export const app = new Elysia({ prefix: "/api" })
-	.use(cors({ origin: Bun.env.WEB_ORIGIN, allowedHeaders: ["Content-Type", IDEMPOTENCY_KEY_HEADER, "X-Request-Id"] }))
+	.use(cors({ origin: Bun.env.WEB_ORIGIN, allowedHeaders: ["Content-Type", "Idempotency-Key"] }))
 	.use(openapi({ path: "/docs" }))
 	.onError(({ code, error, set }) => {
 		if (code !== "UNKNOWN") {

@@ -4,11 +4,9 @@ import { accounts, transactions } from "@api/features/projection/projection.stor
 const RECENT_TRANSACTIONS = 20;
 
 export const projectionRoutes = new Elysia()
-	.get("/accounts", async () => {
-		const documents = await accounts.find().sort({ ownerName: 1 }).toArray();
-
-		return { data: documents.map(({ _id, ownerName }) => ({ id: _id, name: ownerName })) };
-	})
+	.get("/accounts", async () => ({
+		data: await accounts.find({}, { projection: { _id: 0, id: "$_id", name: "$ownerName" } }).sort({ ownerName: 1 }).toArray(),
+	}))
 	.get("/accounts/:accountId", async ({ params: { accountId } }) => {
 		const account = await accounts.findOne({ _id: accountId });
 

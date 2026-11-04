@@ -8,11 +8,10 @@ export const balancesProjector: Projector = {
 		const version = Number(recorded.revision);
 		const isNewer = { $gt: [version, { $ifNull: ["$version", -1] }] };
 		const owner = event.type === EventType.AccountCreated ? { ownerName: event.data.ownerName } : {};
-		const balance = event.type === EventType.AccountCreated ? 0 : event.data.balance;
 
 		return accounts.updateOne(
 			{ _id: event.data.accountId },
-			[{ $set: { ...owner, balance: { $cond: [isNewer, balance, "$balance"] }, version: { $max: ["$version", version] } } }],
+			[{ $set: { ...owner, balance: { $cond: [isNewer, event.data.balance, "$balance"] }, version: { $max: ["$version", version] } } }],
 			{ upsert: true },
 		);
 	},

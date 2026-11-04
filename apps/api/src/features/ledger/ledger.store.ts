@@ -5,11 +5,10 @@ import {
 	jsonEvent,
 	KurrentDBClient,
 	NO_STREAM,
-	type ReadStreamOptions,
 	StreamNotFoundError,
 	WrongExpectedVersionError,
 } from "@kurrent/kurrentdb-client";
-import { type AccountEvent, EventType } from "@api/features/ledger/ledger.events";
+import type { AccountEvent } from "@api/features/ledger/ledger.events";
 
 export const store = KurrentDBClient.connectionString(Bun.env.KURRENTDB_URL as string);
 
@@ -22,32 +21,26 @@ export type Account = { accountId: string; balance: number; revision: bigint | t
 export type Append = { account: Account; event: AccountEvent };
 export type Response = { balance: number };
 
-async function read<T>(streamName: string, options?: ReadStreamOptions) {
-	const events: (T & { revision: bigint })[] = [];
-
+async function readLast<T>(streamName: string) {
 	try {
-		for await (const { event } of store.readStream(streamName, options)) {
-			if (event) {
-				events.push({ ...(event as T), revision: event.revision });
-			}
+		for await (const { event } of store.readStream(streamName, { direction: BACKWARDS, fromRevision: END, maxCount: 1 })) {
+			return event && { ...(event as T), revision: event.revision };
 		}
 	} catch (error) {
 		if (!(error instanceof StreamNotFoundError)) {
 			throw error;
 		}
 	}
-
-	return events;
 }
 
 export async function loadAccount(accountId: string): Promise<Account> {
-	const [last] = await read<AccountEvent>(accountStream(accountId), { direction: BACKWARDS, fromRevision: END, maxCount: 1 });
+	const last = await readLast<AccountEvent>(accountStream(accountId));
 
-	return { accountId, balance: !last || last.type === EventType.AccountCreated ? 0 : last.data.balance, revision: last?.revision ?? NO_STREAM };
+	return { accountId, balance: last?.data.balance ?? 0, revision: last?.revision ?? NO_STREAM };
 }
 
 export async function findResponse(key: string) {
-	const [processed] = await read<{ data: Response }>(idempotencyStream(key));
+	const processed = await readLast<{ data: Response }>(idempotencyStream(key));
 
 	return processed?.data;
 }

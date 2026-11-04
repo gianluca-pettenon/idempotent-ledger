@@ -32,7 +32,7 @@ flowchart LR
 One stream per account. The account exists once its stream holds `AccountCreated`. Every event carries the `accountId` it belongs to.
 
 ```text
-Account-{accountId}    AccountCreated   { accountId, ownerName }
+Account-{accountId}    AccountCreated   { accountId, ownerName, balance }
                        MoneyDeposited   { accountId, amount, balance }
                        MoneyWithdrawn   { accountId, amount, balance }
                        TransferSent     { accountId, transferId, counterpartyAccountId, amount, balance }
@@ -104,7 +104,7 @@ flowchart TD
 - **Idempotency** is a stream that can be created only once. Two concurrent requests with the same key race on `no_stream`; the loser retries, finds the record and replays it.
 - **Idempotency lives in the event store** because it is written in the same atomic append as the money. A key kept in Redis or the read model would be a dual write: a crash between the two either loses the key (the retry moves money twice) or keeps a key for an append that never happened.
 
-Accounts are not opened by the API: they come from an external, one-off migration that appends `AccountCreated` to each `Account-{id}` stream.
+Accounts are not opened by the API: they come from an external, one-off migration that appends `AccountCreated` (with its opening balance) to each `Account-{id}` stream. Every event carries a balance, so the last one is always the account's state.
 
 Without `Idempotency-Key`, every request is processed. With it, the request is processed once and every retry replays the saved response.
 
@@ -122,8 +122,9 @@ apps/api/src/
     projection/                     read side (MongoDB)
       projection.store.ts           MongoDB collections
       projections.ts                runs every projector, one consumer group each
-      balances.projector.ts         accounts view: owner and balance
-      statements.projector.ts       transactions view: one line per movement
+      projectors/
+        balances.projector.ts       accounts view: owner and balance
+        statements.projector.ts     transactions view: one line per movement
       projection.routes.ts          GET /accounts, /accounts/:id
 
 apps/api/tests/features/ledger/ledger.test.ts   end-to-end against real KurrentDB and MongoDB

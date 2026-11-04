@@ -92,7 +92,6 @@ async function runRequest(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Request-Id': crypto.randomUUID(),
         ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       },
       body: JSON.stringify(body),
