@@ -37,17 +37,17 @@ Account-{accountId}    AccountCreated   { accountId, ownerName }
                        MoneyWithdrawn   { accountId, amount }
                        TransferSent     { accountId, transferId, counterpartyAccountId, amount }
                        TransferReceived { accountId, transferId, counterpartyAccountId, amount }
-Idempotency-{accountId}-{key}
-                       RequestProcessed { request, response }
+Snapshot-{accountId}   AccountSnapshot  { balance, revision }
+Idempotency-{key}      RequestProcessed { balance }
 ```
 
 ```text
 balance = Σ MoneyDeposited + Σ TransferReceived − Σ MoneyWithdrawn − Σ TransferSent
 ```
 
-Commands rebuild the account from the event store, never from MongoDB, so a lagging read model can never let a withdrawal or transfer through without funds.
+Commands rebuild the account from the event store, never from MongoDB, so a lagging read model can never let a withdrawal or transfer through without funds. Every 100 events the balance is saved to `Snapshot-{accountId}`; loading an account reads the latest snapshot and only the events after it.
 
-Corrections are new events, never edits. Commands always decide on the stream itself, never on MongoDB, so the invariants (no overdraft, no movement on an unknown account) hold even when the read model lags.
+Corrections are new events, never edits.
 
 ## Read model
 
@@ -80,18 +80,16 @@ The read model is disposable: drop a collection and its checkpoint, and its proj
 ```mermaid
 flowchart TD
     start(["POST /transfers<br/>Idempotency-Key: K"])
-    key{"1. Idempotency-from-K<br/>exists?"}
+    key{"1. Idempotency-K<br/>exists?"}
     replay(["replay saved result<br/>(duplicate)"])
-    conflict(["409"])
-    read["2. read both account streams<br/>fold balances, remember each revision"]
-    decide{"3. decide<br/>same account?<br/>insufficient funds?"}
+    read["2. read both accounts<br/>latest snapshot + newer events"]
+    decide{"3. insufficient funds?"}
     invalid(["422"])
-    append{"4. one atomic multi-stream append<br/>Account-from, expected r1: TransferSent<br/>Account-to, expected r2: TransferReceived<br/>Idempotency-from-K, expected no stream: RequestProcessed"}
+    append{"4. one atomic multi-stream append<br/>Account-from, expected r1: TransferSent<br/>Account-to, expected r2: TransferReceived<br/>Idempotency-K, expected no stream: RequestProcessed"}
     done(["processed"])
 
     start --> key
-    key -- "same request" --> replay
-    key -- "different request" --> conflict
+    key -- "yes" --> replay
     key -- "no" --> read
     read --> decide
     decide -- "violated" --> invalid
@@ -107,36 +105,30 @@ flowchart TD
 
 Accounts are not opened by the API: they come from an external, one-off migration that appends `AccountCreated` to each `Account-{id}` stream.
 
-The idempotency scope is `(account, key)`, and the stored request includes the operation, so reusing a key for a different payload is a 409.
+Without `Idempotency-Key`, every request is processed. With it, the request is processed once and every retry replays the saved response.
 
 ## Code
 
 ```text
 apps/api/src/
-  server.ts                    composes the features into one Elysia app
+  server.ts                         composes the features into one Elysia app
   features/
-    ledger/                        write side (KurrentDB)
-      domain/ledger.events.ts               every event type and stream prefix in KurrentDB (enums)
-      domain/ledger.domain.ts               rules only: event payloads, fold, decide* (no I/O)
-      repositories/ledger.repository.ts     KurrentDB reads and atomic appends
-      services/ledger.service.ts            commands: read, decide, append, retry, idempotency
-      routes/ledger.routes.ts               POST /accounts/:id/deposits, /withdrawals, /transfers
-    projection/                    read side (MongoDB)
-      repositories/projection.repository.ts every MongoDB query
-      services/projection.service.ts        projector runner (subscription + checkpoint) and queries
-      services/balances.projector.ts        accounts view: owner and balance
-      services/statements.projector.ts      transactions view: one line per movement
-      routes/projection.routes.ts           GET /accounts, /accounts/:id
+    ledger/                         write side (KurrentDB)
+      ledger.events.ts              event types and the balance delta of each
+      ledger.store.ts               load account (snapshot + events), atomic append, snapshots
+      ledger.service.ts             commands: idempotency, funds check, optimistic retry
+      ledger.routes.ts              POST /accounts/:id/deposits, /withdrawals, /transfers
+    projection/                     read side (MongoDB)
+      projection.store.ts           collections and checkpoints
+      projector.ts                  projector runner (subscription + checkpoint)
+      balances.projector.ts         accounts view: owner and balance
+      statements.projector.ts       transactions view: one line per movement
+      projection.routes.ts          GET /accounts, /accounts/:id
 
-apps/api/tests/                    mirrors src/
-  features/ledger/
-    domain/ledger.domain.test.ts            unit tests of the rules, no database
-    ledger.test.ts                          end-to-end tests against real KurrentDB and MongoDB
+apps/api/tests/features/ledger/ledger.test.ts   end-to-end against real KurrentDB and MongoDB
 ```
 
-Each layer only talks to the one below it: routes → service → domain and repository. Rules never touch I/O, and queries never hold a rule.
-
-Validation lives in the domain, not in the routes: the amount must be a positive integer, and unknown accounts are a 404. Every endpoint answers `{ data }`. Errors are plain `new Error(message, { cause: status })`; one `onError` turns them into `{ message }` with that status.
+The only business rule is the funds check. Every endpoint answers `{ data }`. Errors are plain `new Error(message, { cause: status })`; one `onError` turns them into `{ message }` with that status.
 
 ## Getting started
 

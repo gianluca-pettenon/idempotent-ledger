@@ -33,7 +33,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["bun", "run", "apps/api/src/features/projection/services/balances.projector.ts"]
+    command: ["bun", "run", "apps/api/src/features/projection/balances.projector.ts"]
     restart: unless-stopped
     environment:
       KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
@@ -46,7 +46,7 @@ services:
 
   statements-projector:
     <<: *projector
-    command: ["bun", "run", "apps/api/src/features/projection/services/statements.projector.ts"]
+    command: ["bun", "run", "apps/api/src/features/projection/statements.projector.ts"]
 
   api:
     build:
