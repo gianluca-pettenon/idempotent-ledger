@@ -1,5 +1,7 @@
 import { Elysia, t } from "elysia";
-import { deposit, transfer, withdraw } from "@api/features/ledger/ledger.service";
+import { deposit } from "@api/features/ledger/commands/deposit";
+import { transfer } from "@api/features/ledger/commands/transfer";
+import { withdraw } from "@api/features/ledger/commands/withdraw";
 
 const getIdempotencyKey = (request: Request) => request.headers.get("Idempotency-Key");
 

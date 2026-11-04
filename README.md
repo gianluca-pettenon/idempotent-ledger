@@ -117,7 +117,9 @@ apps/api/src/
     ledger/                         write side (KurrentDB)
       ledger.events.ts              event types and payloads
       ledger.store.ts               load account (last event), atomic append, idempotency
-      ledger.service.ts             commands: idempotency, funds check, optimistic retry
+      commands/
+        command.ts                  shared: idempotency, funds check, optimistic retry
+        deposit.ts, withdraw.ts, transfer.ts   one file per command
       ledger.routes.ts              POST /accounts/:id/deposits, /withdrawals, /transfers
     projection/                     read side (MongoDB)
       projection.store.ts           MongoDB collections
