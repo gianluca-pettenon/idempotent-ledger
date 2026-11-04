@@ -6,7 +6,7 @@ export enum EventType {
 	TransferReceived = "TransferReceived",
 }
 
-type Movement = { accountId: string; amount: number };
+type Movement = { accountId: string; amount: number; balance: number };
 type Transfer = Movement & { transferId: string; counterpartyAccountId: string };
 
 export type AccountEvent =

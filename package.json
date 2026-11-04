@@ -11,8 +11,7 @@
     "dev:api": "bun --hot --env-file=.env apps/api/src/server.ts",
     "dev:web": "bun --env-file=.env run --filter '@banking-ledger/web' dev",
     "start": "bun --env-file=.env apps/api/src/server.ts",
-    "projector:balances": "bun --env-file=.env apps/api/src/features/projection/balances.projector.ts",
-    "projector:statements": "bun --env-file=.env apps/api/src/features/projection/statements.projector.ts"
+    "projections": "bun --env-file=.env apps/api/src/features/projection/projections.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

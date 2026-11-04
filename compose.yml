@@ -1,7 +1,26 @@
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: apps/api/Dockerfile
+  restart: unless-stopped
+  environment: &backend-env
+    KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
+    MONGODB_URL: mongodb://mongodb:27017/banking-ledger
+  depends_on:
+    kurrentdb:
+      condition: service_healthy
+    mongodb:
+      condition: service_healthy
+
+x-healthcheck: &healthcheck
+  interval: 5s
+  timeout: 5s
+  retries: 10
+
 services:
 
   kurrentdb:
-    image: docker.kurrent.io/kurrent-latest/kurrentdb:26.1
+    image: kurrentplatform/kurrentdb:26.2
     environment:
       KURRENTDB_INSECURE: "true"
       KURRENTDB_RUN_PROJECTIONS: None
@@ -11,59 +30,36 @@ services:
     volumes:
       - kurrentdb:/var/lib/kurrentdb
     healthcheck:
+      <<: *healthcheck
       test: ["CMD-SHELL", "curl -sf http://localhost:2113/health/live"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
+  # Read side: views materialized by the projections.
   mongodb:
-    image: mongo:8
+    # MongoDB 8 has no official Alpine variant; keep the supported upstream image.
+    image: mongo:8.3
     ports:
       - "${MONGODB_PORT}:27017"
     volumes:
       - mongodb:/data/db
     healthcheck:
+      <<: *healthcheck
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  # One process per read-model view, each with its own checkpoint.
-  balances-projector: &projector
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    command: ["bun", "run", "apps/api/src/features/projection/balances.projector.ts"]
-    restart: unless-stopped
-    environment:
-      KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
-      MONGODB_URL: mongodb://mongodb:27017/banking-ledger
-    depends_on:
-      kurrentdb:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
-
-  statements-projector:
-    <<: *projector
-    command: ["bun", "run", "apps/api/src/features/projection/statements.projector.ts"]
 
   api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    env_file: .env
+    <<: *backend
     ports:
       - "${API_PORT}:${API_PORT}"
     environment:
-      KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
-      MONGODB_URL: mongodb://mongodb:27017/banking-ledger
+      <<: *backend-env
+      API_PORT: ${API_PORT}
       WEB_ORIGIN: http://localhost:${PORT}
-    depends_on:
-      kurrentdb:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
+
+  # Every projector runs here, each in its own consumer group; replicas share the events.
+  projections:
+    <<: *backend
+    command: ["bun", "run", "apps/api/src/features/projection/projections.ts"]
+    deploy:
+      replicas: 2
 
   web:
     build:
@@ -71,12 +67,12 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         VITE_API_BASE_URL: http://localhost:${API_PORT}/api
-    env_file: .env
     ports:
       - "${PORT}:${PORT}"
+    environment:
+      PORT: ${PORT}
     depends_on:
-      api:
-        condition: service_started
+      - api
 
 volumes:
   kurrentdb:

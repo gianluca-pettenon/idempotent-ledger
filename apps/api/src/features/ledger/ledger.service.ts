@@ -35,25 +35,22 @@ function assertFunds(account: Account, amount: number) {
 	}
 }
 
+// Every movement carries the balance it leaves behind, so the read model never depends on event order.
 export const deposit = (accountId: string, amount: number, key: string | null) =>
 	execute(key, async () => {
 		const account = await loadAccount(accountId);
+		const balance = account.balance + amount;
 
-		return {
-			appends: [{ account, event: { type: EventType.MoneyDeposited, data: { accountId, amount } } }],
-			balance: account.balance + amount,
-		};
+		return { appends: [{ account, event: { type: EventType.MoneyDeposited, data: { accountId, amount, balance } } }], balance };
 	});
 
 export const withdraw = (accountId: string, amount: number, key: string | null) =>
 	execute(key, async () => {
 		const account = await loadAccount(accountId);
 		assertFunds(account, amount);
+		const balance = account.balance - amount;
 
-		return {
-			appends: [{ account, event: { type: EventType.MoneyWithdrawn, data: { accountId, amount } } }],
-			balance: account.balance - amount,
-		};
+		return { appends: [{ account, event: { type: EventType.MoneyWithdrawn, data: { accountId, amount, balance } } }], balance };
 	});
 
 export const transfer = (fromAccountId: string, toAccountId: string, amount: number, key: string | null) =>
@@ -62,12 +59,14 @@ export const transfer = (fromAccountId: string, toAccountId: string, amount: num
 		assertFunds(from, amount);
 
 		const transferId = Bun.randomUUIDv7();
+		const sent = { accountId: fromAccountId, counterpartyAccountId: toAccountId, transferId, amount, balance: from.balance - amount };
+		const received = { accountId: toAccountId, counterpartyAccountId: fromAccountId, transferId, amount, balance: to.balance + amount };
 
 		return {
 			appends: [
-				{ account: from, event: { type: EventType.TransferSent, data: { accountId: fromAccountId, counterpartyAccountId: toAccountId, transferId, amount } } },
-				{ account: to, event: { type: EventType.TransferReceived, data: { accountId: toAccountId, counterpartyAccountId: fromAccountId, transferId, amount } } },
+				{ account: from, event: { type: EventType.TransferSent, data: sent } },
+				{ account: to, event: { type: EventType.TransferReceived, data: received } },
 			],
-			balance: from.balance - amount,
+			balance: sent.balance,
 		};
 	});

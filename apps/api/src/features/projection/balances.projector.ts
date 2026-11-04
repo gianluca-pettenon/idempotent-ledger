@@ -1,23 +1,20 @@
-import { delta, EventType } from "@api/features/ledger/ledger.events";
+import { EventType } from "@api/features/ledger/ledger.events";
 import { accounts } from "@api/features/projection/projection.store";
-import { type Projector, runProjector } from "@api/features/projection/projector";
+import type { Projector } from "@api/features/projection/projections";
 
-// Accounts with their running balance. The version guard makes a replayed event change nothing.
+// Accounts with their balance. The newest revision wins, so events may arrive in any order or twice.
 export const balancesProjector: Projector = {
 	name: "balances",
 	project: (event, recorded) => {
 		const version = Number(recorded.revision);
+		const isNewer = { $gt: [version, { $ifNull: ["$version", -1] }] };
+		const owner = event.type === EventType.AccountCreated ? { ownerName: event.data.ownerName } : {};
+		const balance = event.type === EventType.AccountCreated ? 0 : event.data.balance;
 
-		if (event.type === EventType.AccountCreated) {
-			const { accountId, ownerName } = event.data;
-
-			return accounts.updateOne({ _id: accountId }, { $setOnInsert: { ownerName, balance: 0, version } }, { upsert: true });
-		}
-
-		return accounts.updateOne({ _id: event.data.accountId, version: { $lt: version } }, { $inc: { balance: delta(event) }, $set: { version } });
+		return accounts.updateOne(
+			{ _id: event.data.accountId },
+			[{ $set: { ...owner, balance: { $cond: [isNewer, balance, "$balance"] }, version: { $max: ["$version", version] } } }],
+			{ upsert: true },
+		);
 	},
 };
-
-if (import.meta.main) {
-	await runProjector(balancesProjector);
-}

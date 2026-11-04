@@ -4,7 +4,7 @@ An event-sourced ledger with CQRS, split into processes that only meet through t
 
 - **KurrentDB** ([formerly EventStoreDB](https://www.kurrent.io/)) is the source of truth. Every fact, from opening an account to moving money, is an immutable event.
 - **MongoDB** holds the read model: one document per account and one per statement line, projected from the events.
-- **api** decides and appends. **balances-projector** and **statements-projector** each subscribe and write their own view in MongoDB. Each scales and fails on its own: the API is stateless, so it can run many replicas, and optimistic concurrency keeps them consistent.
+- **api** decides and appends. **projections** runs every projector, each in its own KurrentDB consumer group, and writes its view in MongoDB. Both are stateless and scale by replicas: optimistic concurrency keeps the API consistent, and the consumer groups share events across projection replicas.
 
 It is not a payment rail or a bank core. It shows idempotent commands, optimistic concurrency, atomic multi-account writes, and a rebuildable read model.
 
@@ -13,14 +13,14 @@ flowchart LR
     client([Client])
     api["api<br/>decides on the stream's fold"]
     kurrent[("KurrentDB<br/>event streams")]
-    balances["balances-projector"]
-    statements["statements-projector"]
+    balances["balances projector"]
+    statements["statements projector"]
     mongo[("MongoDB<br/>accounts, transactions")]
 
     client -- "POST (commands)" --> api
     api -- append --> kurrent
-    kurrent -- "subscribeToAll + checkpoint" --> balances
-    kurrent -- "subscribeToAll + checkpoint" --> statements
+    kurrent -- "consumer group: balances" --> balances
+    kurrent -- "consumer group: statements" --> statements
     balances -- accounts --> mongo
     statements -- transactions --> mongo
     client -- "GET (queries)" --> api
@@ -33,10 +33,10 @@ One stream per account. The account exists once its stream holds `AccountCreated
 
 ```text
 Account-{accountId}    AccountCreated   { accountId, ownerName }
-                       MoneyDeposited   { accountId, amount }
-                       MoneyWithdrawn   { accountId, amount }
-                       TransferSent     { accountId, transferId, counterpartyAccountId, amount }
-                       TransferReceived { accountId, transferId, counterpartyAccountId, amount }
+                       MoneyDeposited   { accountId, amount, balance }
+                       MoneyWithdrawn   { accountId, amount, balance }
+                       TransferSent     { accountId, transferId, counterpartyAccountId, amount, balance }
+                       TransferReceived { accountId, transferId, counterpartyAccountId, amount, balance }
 Snapshot-{accountId}   AccountSnapshot  { balance, revision }
 Idempotency-{key}      RequestProcessed { balance }
 ```
@@ -51,19 +51,19 @@ Corrections are new events, never edits.
 
 ## Read model
 
-Each view of the read model has its own projector: a separate process with its own catch-up subscription on `$all` (filtered to `Account-*`), its own checkpoint and its own collection. They all read the same events and never talk to each other.
+Each view of the read model has its own projector and its own persistent subscription on `$all` (filtered to `Account-*`). KurrentDB keeps each group's checkpoint, retries a failed event and parks it after too many attempts, so one broken view never stalls the others. All projectors run in the single `projections` process; its replicas split each group's events.
 
 ```mermaid
 flowchart LR
     created["AccountCreated"]
     movement["Money* / Transfer*"]
-    balances["balances-projector"]
-    statements["statements-projector"]
+    balances["balances projector"]
+    statements["statements projector"]
     accounts[("accounts<br/>_id, ownerName, balance, version")]
     transactions[("transactions<br/>_id = eventId, accountId, type, amount, counterpartyAccountId")]
 
     created -- "insert, balance 0" --> balances
-    movement -- "$inc balance, version = stream revision" --> balances
+    movement -- "balance carried by the event, newest revision wins" --> balances
     balances --> accounts
     movement -- "one line per event" --> statements
     statements --> transactions
@@ -71,9 +71,9 @@ flowchart LR
 
 So one view can fail, lag, be rebuilt or be deployed without touching the others, and a new view (a report, notifications) starts from the first event and gets the whole history. The counterparty's name is joined at read time (`$lookup` on `accounts`), so the statements projector depends on no other view.
 
-There are no multi-document transactions. Every write is idempotent instead: statement lines are upserted by event id, and the balance only moves when the event is newer than the account's `version`. The `$all` position is saved after each event, so a crash replays at most one event, harmlessly.
+Replicas mean events can arrive out of order or twice, so every write is order-independent and idempotent: statement lines are upserted by event id, and each movement carries the balance it leaves behind, applied only when its revision is newer than the account's `version`.
 
-The read model is disposable: drop a collection and its checkpoint, and its projector rebuilds it from the events. Reads are eventually consistent, typically a few milliseconds behind the writes, and the two views may briefly disagree with each other.
+The read model is disposable: drop a collection and reset its consumer group to the start, and its projector rebuilds it from the events. Reads are eventually consistent, typically a few milliseconds behind the writes, and the two views may briefly disagree with each other.
 
 ## A command
 
@@ -119,8 +119,8 @@ apps/api/src/
       ledger.service.ts             commands: idempotency, funds check, optimistic retry
       ledger.routes.ts              POST /accounts/:id/deposits, /withdrawals, /transfers
     projection/                     read side (MongoDB)
-      projection.store.ts           collections and checkpoints
-      projector.ts                  projector runner (subscription + checkpoint)
+      projection.store.ts           MongoDB collections
+      projections.ts                runs every projector, one consumer group each
       balances.projector.ts         accounts view: owner and balance
       statements.projector.ts       transactions view: one line per movement
       projection.routes.ts          GET /accounts, /accounts/:id
@@ -145,7 +145,7 @@ API_PORT=3001
 ```
 
 ```bash
-make up      # KurrentDB, MongoDB, projectors, API and web
+make up      # KurrentDB, MongoDB, API, projections and web
 make down    # stop everything
 make test    # API tests against throwaway KurrentDB and MongoDB
 ```
@@ -160,12 +160,12 @@ covered
   idempotent effect per (account, key)
   optimistic concurrency without lost updates
   full audit trail: the stream is the history
-  effectively-once projection into MongoDB (idempotent writes + checkpoint)
+  effectively-once projection into MongoDB (idempotent, order-independent writes)
 
 not covered
   snapshots (every command replays the whole account stream), idempotency-record expiry, input validation beyond the amount
   read-your-writes on queries, currencies/FX, authentication
-  external payment rails, HA/DR, more than one instance of the same projector (persistent subscriptions would partition by account)
+  external payment rails, HA/DR
 ```
 
 ## Preview

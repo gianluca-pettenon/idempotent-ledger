@@ -2,9 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { jsonEvent, NO_STREAM } from "@kurrent/kurrentdb-client";
 import { EventType } from "@api/features/ledger/ledger.events";
 import { ACCOUNT_STREAM, loadAccount, store } from "@api/features/ledger/ledger.store";
-import { balancesProjector } from "@api/features/projection/balances.projector";
-import { runProjector } from "@api/features/projection/projector";
-import { statementsProjector } from "@api/features/projection/statements.projector";
+import { startProjections } from "@api/features/projection/projections";
 import { app } from "@api/server";
 
 async function post(path: string, body: unknown, idempotencyKey?: string) {
@@ -52,8 +50,7 @@ const deposit = (accountId: string, amount: number, key?: string) => post(`/acco
 const withdraw = (accountId: string, amount: number) => post(`/accounts/${accountId}/withdrawals`, { amount });
 
 beforeAll(() => {
-	runProjector(balancesProjector);
-	runProjector(statementsProjector);
+	startProjections();
 });
 
 describe("ledger", () => {
