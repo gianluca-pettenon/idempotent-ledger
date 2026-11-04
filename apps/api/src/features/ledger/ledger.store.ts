@@ -34,15 +34,15 @@ async function readLast<T>(streamName: string) {
 }
 
 export async function loadAccount(accountId: string): Promise<Account> {
-	const last = await readLast<AccountEvent>(accountStream(accountId));
+	const { data, revision } = await readLast<AccountEvent>(accountStream(accountId));
 
-	return { accountId, balance: last?.data.balance ?? 0, revision: last?.revision ?? NO_STREAM };
+	return { accountId, balance: data.balance ?? 0, revision: revision ?? NO_STREAM };
 }
 
 export async function findResponse(key: string) {
-	const processed = await readLast<{ data: Response }>(idempotencyStream(key));
+	const last = await readLast<{ data: Response }>(idempotencyStream(key));
 
-	return processed?.data;
+	return last?.data;
 }
 
 export async function append(appends: Append[], key: string | null, response: Response) {
