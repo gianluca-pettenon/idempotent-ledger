@@ -11,7 +11,7 @@ const TRANSACTION_TYPE: Record<MovementEvent["type"], string> = {
 
 export const statementsProjector: Projector = {
 	name: "statements",
-	setup: () => transactions.createIndex({ accountId: 1, version: -1 }),
+	setup: () => transactions.createIndexes([{ key: { accountId: 1, version: -1 } }]),
 	project: async (event, recorded) => {
 		if (event.type === EventType.AccountCreated) {
 			return;
