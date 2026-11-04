@@ -3,7 +3,6 @@ import { accounts, transactions } from "@api/features/projection/projection.stor
 
 const RECENT_TRANSACTIONS = 20;
 
-// Reads come only from the read model, already materialized by the projectors.
 export const projectionRoutes = new Elysia()
 	.get("/accounts", async () => {
 		const documents = await accounts.find().sort({ ownerName: 1 }).toArray();

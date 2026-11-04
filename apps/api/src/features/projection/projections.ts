@@ -19,8 +19,6 @@ export type Projector = {
 
 const PROJECTORS = [balancesProjector, statementsProjector];
 
-// One consumer group per projector: KurrentDB keeps its checkpoint, retries a failed event
-// and parks it after too many attempts. Replicas of this process share each group's events.
 async function subscribe({ name, setup, project }: Projector) {
 	await setup?.();
 

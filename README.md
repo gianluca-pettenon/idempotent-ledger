@@ -37,15 +37,16 @@ Account-{accountId}    AccountCreated   { accountId, ownerName }
                        MoneyWithdrawn   { accountId, amount, balance }
                        TransferSent     { accountId, transferId, counterpartyAccountId, amount, balance }
                        TransferReceived { accountId, transferId, counterpartyAccountId, amount, balance }
-Snapshot-{accountId}   AccountSnapshot  { balance, revision }
 Idempotency-{key}      RequestProcessed { balance }
 ```
 
 ```text
-balance = Σ MoneyDeposited + Σ TransferReceived − Σ MoneyWithdrawn − Σ TransferSent
+balance = the balance carried by the account's last event
 ```
 
-Commands rebuild the account from the event store, never from MongoDB, so a lagging read model can never let a withdrawal or transfer through without funds. Every 100 events the balance is saved to `Snapshot-{accountId}`; loading an account reads the latest snapshot and only the events after it.
+Commands rebuild the account from the event store, never from MongoDB, so a lagging read model can never let a withdrawal or transfer through without funds. Every movement carries the balance it leaves behind, so loading an account reads one event, its last, whatever the stream's length: each event is its own snapshot, written in the same atomic append.
+
+Streams still grow forever. At scale they would be closed per period ("closing the books"): a closing event carries the balance into a new stream, and old streams move to cold storage.
 
 Corrections are new events, never edits.
 
@@ -82,7 +83,7 @@ flowchart TD
     start(["POST /transfers<br/>Idempotency-Key: K"])
     key{"1. Idempotency-K<br/>exists?"}
     replay(["replay saved result<br/>(duplicate)"])
-    read["2. read both accounts<br/>latest snapshot + newer events"]
+    read["2. read the last event of both accounts<br/>balance and revision"]
     decide{"3. insufficient funds?"}
     invalid(["422"])
     append{"4. one atomic multi-stream append<br/>Account-from, expected r1: TransferSent<br/>Account-to, expected r2: TransferReceived<br/>Idempotency-K, expected no stream: RequestProcessed"}
@@ -114,8 +115,8 @@ apps/api/src/
   server.ts                         composes the features into one Elysia app
   features/
     ledger/                         write side (KurrentDB)
-      ledger.events.ts              event types and the balance delta of each
-      ledger.store.ts               load account (snapshot + events), atomic append, snapshots
+      ledger.events.ts              event types and payloads
+      ledger.store.ts               load account (last event), atomic append, idempotency
       ledger.service.ts             commands: idempotency, funds check, optimistic retry
       ledger.routes.ts              POST /accounts/:id/deposits, /withdrawals, /transfers
     projection/                     read side (MongoDB)
@@ -157,13 +158,14 @@ Web on `localhost:3000`, API on `localhost:3001` (OpenAPI at `/api/docs`), Kurre
 ```text
 covered
   atomic, append-only writes across accounts
-  idempotent effect per (account, key)
+  idempotent effect per key
+  constant-time account load: the last event carries the balance
   optimistic concurrency without lost updates
   full audit trail: the stream is the history
   effectively-once projection into MongoDB (idempotent, order-independent writes)
 
 not covered
-  snapshots (every command replays the whole account stream), idempotency-record expiry, input validation beyond the amount
+  closing the books per period, idempotency-record expiry, input validation beyond the amount
   read-your-writes on queries, currencies/FX, authentication
   external payment rails, HA/DR
 ```

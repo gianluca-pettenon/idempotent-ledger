@@ -9,7 +9,6 @@ const TRANSACTION_TYPE: Record<MovementEvent["type"], string> = {
 	[EventType.TransferReceived]: "transfer_in",
 };
 
-// One statement line per movement, keyed by the event id so a replayed event changes nothing.
 export const statementsProjector: Projector = {
 	name: "statements",
 	setup: () => transactions.createIndex({ accountId: 1, version: -1 }),

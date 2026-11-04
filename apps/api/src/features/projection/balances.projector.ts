@@ -2,7 +2,6 @@ import { EventType } from "@api/features/ledger/ledger.events";
 import { accounts } from "@api/features/projection/projection.store";
 import type { Projector } from "@api/features/projection/projections";
 
-// Accounts with their balance. The newest revision wins, so events may arrive in any order or twice.
 export const balancesProjector: Projector = {
 	name: "balances",
 	project: (event, recorded) => {

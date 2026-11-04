@@ -33,9 +33,7 @@ services:
       <<: *healthcheck
       test: ["CMD-SHELL", "curl -sf http://localhost:2113/health/live"]
 
-  # Read side: views materialized by the projections.
   mongodb:
-    # MongoDB 8 has no official Alpine variant; keep the supported upstream image.
     image: mongo:8.3
     ports:
       - "${MONGODB_PORT}:27017"
@@ -54,7 +52,6 @@ services:
       API_PORT: ${API_PORT}
       WEB_ORIGIN: http://localhost:${PORT}
 
-  # Every projector runs here, each in its own consumer group; replicas share the events.
   projections:
     <<: *backend
     command: ["bun", "run", "apps/api/src/features/projection/projections.ts"]

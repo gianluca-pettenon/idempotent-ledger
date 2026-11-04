@@ -13,7 +13,6 @@ up:
 down:
 	$(COMPOSE) down
 
-# Throwaway KurrentDB and MongoDB so tests never touch dev data.
 test:
 	docker run -d --rm --name $(TEST_ES) -p 2114:2113 -e KURRENTDB_INSECURE=true -e KURRENTDB_MEM_DB=true docker.kurrent.io/kurrent-latest/kurrentdb:26.1 >/dev/null
 	docker run -d --rm --name $(TEST_MONGO) -p 27018:27017 --tmpfs /data/db mongo:8 >/dev/null

@@ -10,7 +10,6 @@ const MAX_ATTEMPTS = 10;
 
 type Decision = { appends: Append[]; balance: number };
 
-// Optimistic concurrency: on a conflict, read again and decide again.
 async function execute(key: string | null, decide: () => Promise<Decision>) {
 	for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
 		const previous = key && (await findResponse(key));
@@ -35,7 +34,6 @@ function assertFunds(account: Account, amount: number) {
 	}
 }
 
-// Every movement carries the balance it leaves behind, so the read model never depends on event order.
 export const deposit = (accountId: string, amount: number, key: string | null) =>
 	execute(key, async () => {
 		const account = await loadAccount(accountId);

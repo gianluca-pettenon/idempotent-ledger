@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { jsonEvent, NO_STREAM } from "@kurrent/kurrentdb-client";
 import { EventType } from "@api/features/ledger/ledger.events";
-import { ACCOUNT_STREAM, loadAccount, store } from "@api/features/ledger/ledger.store";
+import { ACCOUNT_STREAM, store } from "@api/features/ledger/ledger.store";
 import { startProjections } from "@api/features/projection/projections";
 import { app } from "@api/server";
 
@@ -23,7 +23,6 @@ async function get(path: string) {
 	return ((await response.json()) as any).data;
 }
 
-// The read model is eventually consistent: poll until the projectors have applied the events.
 async function readModel(accountId: string, balance: number, lines: number) {
 	for (let attempt = 0; attempt < 100; attempt++) {
 		const account = await get(`/accounts/${accountId}`);
@@ -37,7 +36,6 @@ async function readModel(accountId: string, balance: number, lines: number) {
 	throw new Error("Read model never caught up");
 }
 
-// Accounts come pre-registered, as the external migration does.
 async function openAccount(ownerName: string) {
 	const accountId = Bun.randomUUIDv7();
 	const event = jsonEvent({ type: EventType.AccountCreated, data: { accountId, ownerName } });
@@ -99,14 +97,4 @@ describe("ledger", () => {
 		await readModel(user, 10, 1);
 	});
 
-	test("the balance is rebuilt from the latest snapshot", async () => {
-		const user = await openAccount("Snapshot");
-
-		for (let i = 0; i < 120; i++) {
-			await deposit(user, 1);
-		}
-
-		expect((await loadAccount(user)).balance).toBe(120);
-		expect((await withdraw(user, 121)).status).toBe(422);
-	});
 });
