@@ -1,4 +1,4 @@
-FROM oven/bun:1.4.2-alpine AS dependencies
+FROM oven/bun:1.4.4-slim AS dependencies
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ COPY packages ./packages
 
 RUN bun install --frozen-lockfile --production
 
-FROM oven/bun:1.4.2-alpine
+FROM oven/bun:1.4.4-distroless
 
 WORKDIR /app
 
@@ -21,8 +21,8 @@ COPY --from=dependencies /app/apps/api/node_modules ./apps/api/node_modules
 
 ENV NODE_ENV=production
 
-USER bun
+USER nonroot
 
 EXPOSE 3001
 
-CMD ["bun", "run", "--filter", "@banking-ledger/api", "start"]
+CMD ["run", "--filter", "@banking-ledger/api", "start"]

@@ -54,7 +54,7 @@ services:
 
   projections:
     <<: *backend
-    command: ["bun", "run", "apps/api/src/features/projection/projections.ts"]
+    command: ["run", "apps/api/src/features/projection/projections.ts"]
     deploy:
       replicas: 2
 
