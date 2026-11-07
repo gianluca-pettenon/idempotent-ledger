@@ -13,9 +13,15 @@ export const statementsProjector: Projector = {
 	name: "statements",
 	setup: () => transactions.createIndexes([{ key: { accountId: 1, version: -1 } }]),
 	project: async (event, recorded) => {
+		const type = TRANSACTION_TYPE[event.type as MovementEvent["type"]];
+
+		if (!type) {
+			return;
+		}
+
 		const { accountId, amount } = event.data as Movement;
 		const counterpartyAccountId = "counterpartyAccountId" in event.data ? event.data.counterpartyAccountId : undefined;
-		const line = { accountId, amount, counterpartyAccountId, type: TRANSACTION_TYPE[event.type as MovementEvent["type"]], createdAt: recorded.created, version: Number(recorded.revision) };
+		const line = { accountId, amount, counterpartyAccountId, type, createdAt: recorded.created, version: Number(recorded.revision) };
 
 		return transactions.updateOne({ _id: recorded.id }, { $setOnInsert: line }, { upsert: true });
 	},

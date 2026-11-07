@@ -1,4 +1,5 @@
 x-backend: &backend
+  image: banking-ledger-api
   build:
     context: .
     dockerfile: apps/api/Dockerfile
@@ -18,12 +19,11 @@ x-healthcheck: &healthcheck
   retries: 10
 
 services:
-
   kurrentdb:
     image: kurrentplatform/kurrentdb:26.2
+    restart: unless-stopped
     environment:
       KURRENTDB_INSECURE: "true"
-      KURRENTDB_RUN_PROJECTIONS: None
       KURRENTDB_ENABLE_ATOM_PUB_OVER_HTTP: "true"
     ports:
       - "2113:2113"
@@ -35,6 +35,8 @@ services:
 
   mongodb:
     image: mongo:8.3
+    restart: unless-stopped
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.25"]
     ports:
       - "${MONGODB_PORT}:27017"
     volumes:

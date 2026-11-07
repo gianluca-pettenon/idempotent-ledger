@@ -1,4 +1,4 @@
-FROM oven/bun:1.4.4-slim AS dependencies
+FROM oven/bun:1.4.4-alpine AS dependencies
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ COPY packages ./packages
 
 RUN bun install --frozen-lockfile --production
 
-FROM oven/bun:1.4.4-distroless
+FROM oven/bun:1.4.4-alpine
 
 WORKDIR /app
 
