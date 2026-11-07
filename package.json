@@ -1,0 +1,26 @@
+{
+  "name": "banking-ledger",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun --env-file=.env --parallel run dev:api dev:web",
+    "dev:api": "bun --hot --env-file=.env apps/api/src/server.ts",
+    "dev:web": "bun --env-file=.env run --filter '@banking-ledger/web' dev",
+    "start": "bun --env-file=.env apps/api/src/server.ts",
+    "projections": "bun --env-file=.env apps/api/src/features/projection/projections.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+<<<<<<< HEAD
+    "typescript": "5.9.3"
+=======
+    "drizzle-kit": "^0.31.4",
+    "postgres": "^3.4.5",
+    "typescript": "^7.0.2"
+>>>>>>> d8a7fd9 (chore(deps-dev): bump typescript from 5.9.3 to 7.0.2)
+  }
+}

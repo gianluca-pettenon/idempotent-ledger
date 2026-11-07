@@ -1,0 +1,78 @@
+x-backend: &backend
+  image: banking-ledger-api
+  build:
+    context: .
+    dockerfile: apps/api/Dockerfile
+  restart: unless-stopped
+  environment: &backend-env
+    KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
+    MONGODB_URL: mongodb://mongodb:27017/banking-ledger
+  depends_on:
+    kurrentdb:
+      condition: service_healthy
+    mongodb:
+      condition: service_healthy
+
+x-healthcheck: &healthcheck
+  interval: 5s
+  timeout: 5s
+  retries: 10
+
+services:
+  kurrentdb:
+    image: kurrentplatform/kurrentdb:26.2
+    restart: unless-stopped
+    environment:
+      KURRENTDB_INSECURE: "true"
+      KURRENTDB_ENABLE_ATOM_PUB_OVER_HTTP: "true"
+    ports:
+      - "2113:2113"
+    volumes:
+      - kurrentdb:/var/lib/kurrentdb
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "curl -sf http://localhost:2113/health/live"]
+
+  mongodb:
+    image: mongo:8.3
+    restart: unless-stopped
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.25"]
+    ports:
+      - "${MONGODB_PORT}:27017"
+    volumes:
+      - mongodb:/data/db
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
+
+  api:
+    <<: *backend
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    environment:
+      <<: *backend-env
+      API_PORT: ${API_PORT}
+      WEB_ORIGIN: http://localhost:${PORT}
+
+  projections:
+    <<: *backend
+    command: ["run", "apps/api/src/features/projection/projections.ts"]
+    deploy:
+      replicas: 2
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:${API_PORT}/api
+    ports:
+      - "${PORT}:${PORT}"
+    environment:
+      PORT: ${PORT}
+    depends_on:
+      - api
+
+volumes:
+  kurrentdb:
+  mongodb:

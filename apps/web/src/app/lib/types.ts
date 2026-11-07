@@ -1,0 +1,37 @@
+import type { OperationKind as Operation } from '@banking-ledger/shared';
+
+export type { Operation };
+
+export type User = {
+  id: string;
+  name: string;
+};
+
+export type Transaction = {
+  id: string;
+  type:
+    | 'opened'
+    | 'deposit'
+    | 'withdraw'
+    | 'transfer_in'
+    | 'transfer_out'
+    | 'reversal_in'
+    | 'reversal_out';
+  amount: number;
+  createdAt: string;
+  counterpartyAccountId?: string;
+  counterpartyName?: string;
+};
+
+export type Account = {
+  balance: number;
+  currency?: string;
+  transactions: Transaction[];
+};
+
+export type RunEntry = {
+  label: string;
+  outcome: string;
+  ms: number;
+  detail?: string;
+};

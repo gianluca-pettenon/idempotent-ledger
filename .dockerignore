@@ -1,0 +1,12 @@
+node_modules
+.git
+.cursor
+dist
+out
+coverage
+*.db
+*.log
+.env
+.env.*
+.DS_Store
+*.tsbuildinfo
