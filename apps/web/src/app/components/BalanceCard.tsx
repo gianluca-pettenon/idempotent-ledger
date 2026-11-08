@@ -22,11 +22,11 @@ const TRANSACTION_LABEL: Record<
   opened: () => STATEMENT.BADGE.OPENED,
   deposit: () => STATEMENT.BADGE.DEPOSIT,
   withdraw: () => STATEMENT.BADGE.WITHDRAWAL,
-  transfer_in: (counterpartyName) =>
+  transfer_in: counterpartyName =>
     counterpartyName
       ? STATEMENT.transferFrom(counterpartyName)
       : STATEMENT.INCOMING_TRANSFER,
-  transfer_out: (counterpartyName) =>
+  transfer_out: counterpartyName =>
     counterpartyName
       ? STATEMENT.transferTo(counterpartyName)
       : STATEMENT.OUTGOING_TRANSFER,

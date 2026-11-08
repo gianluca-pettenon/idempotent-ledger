@@ -54,7 +54,7 @@ export function OperationForm({
         </p>
 
         <div className="grid grid-cols-1 gap-2 min-[22rem]:grid-cols-3">
-          {OPERATION_KINDS.map((kind) => (
+          {OPERATION_KINDS.map(kind => (
             <Button
               key={kind}
               variant={operation === kind ? operationVariants[kind] : 'outline'}
@@ -88,7 +88,7 @@ export function OperationForm({
             aria-label={FORM.AMOUNT_PER_REQUEST}
             autoComplete="off"
             value={amount}
-            onChange={(event) => onAmountChange(event.target.value)}
+            onChange={event => onAmountChange(event.target.value)}
             className="input font-mono tabular-nums"
           />
         </div>

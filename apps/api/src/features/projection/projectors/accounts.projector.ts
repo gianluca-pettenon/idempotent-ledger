@@ -4,7 +4,7 @@ import type { Projector } from '@api/features/projection/projections';
 
 export const accountsProjector: Projector = {
   name: 'accounts',
-  project: (event) => {
+  project: event => {
     if (event.type !== EventType.AccountCreated) {
       return Promise.resolve();
     }

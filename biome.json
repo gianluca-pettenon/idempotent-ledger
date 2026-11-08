@@ -22,6 +22,7 @@
   },
   "javascript": {
     "formatter": {
+      "arrowParentheses": "asNeeded",
       "quoteStyle": "single",
       "semicolons": "always"
     }

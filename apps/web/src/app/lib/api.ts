@@ -24,15 +24,15 @@ const REQUEST_BUILDER: Record<
   Operation,
   (params: MovementRequestParams) => { path: string; body: unknown }
 > = {
-  [OperationKind.Deposit]: (params) => ({
+  [OperationKind.Deposit]: params => ({
     path: `/accounts/${params.userId}/deposits`,
     body: { amount: params.amount },
   }),
-  [OperationKind.Withdraw]: (params) => ({
+  [OperationKind.Withdraw]: params => ({
     path: `/accounts/${params.userId}/withdrawals`,
     body: { amount: params.amount },
   }),
-  [OperationKind.Transfer]: (params) => ({
+  [OperationKind.Transfer]: params => ({
     path: '/transfers',
     body: {
       fromAccountId: params.userId,

@@ -23,7 +23,7 @@ export function App() {
   const [running, setRunning] = useState(false);
   const [entries, setEntries] = useState<RunEntry[]>([]);
 
-  const recipients = users.filter((user) => user.id !== userId);
+  const recipients = users.filter(user => user.id !== userId);
   const parsedAmount = Number(amount) || CONCURRENCY_DEMO.DEFAULT_AMOUNT;
 
   async function handleRun(withIdempotencyKey: boolean) {

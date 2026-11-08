@@ -22,7 +22,7 @@ const accounts = [
 
 await Promise.try(() =>
   Promise.all(
-    accounts.map(async (data) => {
+    accounts.map(async data => {
       const created = await append(
         [
           {

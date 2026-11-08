@@ -33,7 +33,7 @@ export function RequestResults({ entries }: RequestResultsProps) {
       aria-live="polite"
     >
       <ul className="space-y-2">
-        {entries.map((entry) => (
+        {entries.map(entry => (
           <li
             key={entry.label}
             className="flex flex-col gap-2 rounded-2xl border border-border/60 bg-surface/70 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"

@@ -29,7 +29,7 @@ export function Select({
   return (
     <select
       value={value}
-      onChange={(event) => onChange(event.target.value)}
+      onChange={event => onChange(event.target.value)}
       disabled={disabled}
       required={required}
       className={cn('input select-trigger min-w-[10rem]', className)}
@@ -39,7 +39,7 @@ export function Select({
           {placeholder}
         </option>
       ) : null}
-      {options.map((option) => (
+      {options.map(option => (
         <option key={option.value} value={option.value}>
           {option.label}
         </option>
