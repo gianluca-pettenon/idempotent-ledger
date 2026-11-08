@@ -15,12 +15,8 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-<<<<<<< HEAD
-    "typescript": "5.9.3"
-=======
-    "drizzle-kit": "^0.31.4",
-    "postgres": "^3.4.5",
-    "typescript": "^7.0.2"
->>>>>>> d8a7fd9 (chore(deps-dev): bump typescript from 5.9.3 to 7.0.2)
+    "drizzle-kit": "0.31.4",
+    "postgres": "3.4.5",
+    "typescript": "7.0.2"
   }
 }
