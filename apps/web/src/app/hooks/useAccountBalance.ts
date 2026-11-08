@@ -22,18 +22,18 @@ async function fetchAccountData(userId: string) {
 }
 
 export function useAccountBalance(userId: string) {
-  const [account, setAccount] = useState<AccountState>({ balance: null, transactions: [] });
+  const [account, setAccount] = useState<AccountState>({
+    balance: null,
+    transactions: [],
+  });
 
   async function refresh() {
     setAccount(await fetchAccountData(userId));
   }
 
-  useEffect(
-    () => {
-      void refresh();
-    },
-    [userId],
-  );
+  useEffect(() => {
+    void fetchAccountData(userId).then(setAccount);
+  }, [userId]);
 
   return { ...account, refresh };
 }

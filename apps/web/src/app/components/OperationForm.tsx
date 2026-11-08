@@ -1,6 +1,6 @@
-import type { SubmitEvent } from 'react';
 import { OPERATION_KINDS, OperationKind } from '@banking-ledger/shared';
 import { CONCURRENCY, FORM, OPERATION } from '@banking-ledger/terms';
+import type { SubmitEvent } from 'react';
 import { RequestResults } from '@/app/components/RequestResults';
 import type { Operation, RunEntry, User } from '@/app/lib/types';
 import { Button, type ButtonVariant, Select } from '@/shared/ui';

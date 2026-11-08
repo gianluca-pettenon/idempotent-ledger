@@ -42,7 +42,11 @@ function getTransactionViewModel(transaction: Transaction) {
   return {
     label: TRANSACTION_LABEL[transaction.type](transaction.counterpartyName),
     amount: outgoing ? `-${formattedAmount}` : formattedAmount,
-    amountClassName: opened ? 'text-muted-foreground' : outgoing ? 'text-danger' : 'text-info',
+    amountClassName: opened
+      ? 'text-muted-foreground'
+      : outgoing
+        ? 'text-danger'
+        : 'text-info',
     dotClassName: opened ? 'bg-primary' : outgoing ? 'bg-danger' : 'bg-info',
   };
 }
@@ -83,7 +87,12 @@ export function BalanceCard({ balance, transactions }: BalanceCardProps) {
                       presentation.dotClassName,
                     )}
                   />
-                  <div className={cn('flex items-start justify-between gap-3', last ? 'pb-0' : 'pb-5')}>
+                  <div
+                    className={cn(
+                      'flex items-start justify-between gap-3',
+                      last ? 'pb-0' : 'pb-5',
+                    )}
+                  >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">
                         {presentation.label}

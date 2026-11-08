@@ -41,7 +41,7 @@
   },
   "overrides": [
     {
-      "includes": ["public/**"],
+      "includes": ["apps/web/public/**"],
       "linter": {
         "enabled": false
       }

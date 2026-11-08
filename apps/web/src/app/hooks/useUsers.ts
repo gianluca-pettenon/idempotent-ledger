@@ -7,17 +7,14 @@ export function useUsers() {
   const [users, setUsers] = useState<User[]>([]);
   const [userId, setUserId] = useState('');
 
-  useEffect(
-    () => {
-      void fetchUsers().then(({ users }) => {
-        const [firstUser] = users;
+  useEffect(() => {
+    void fetchUsers().then(({ users }) => {
+      const [firstUser] = users;
 
-        setUsers(users);
-        setUserId(firstUser?.id ?? '');
-      });
-    },
-    [],
-  );
+      setUsers(users);
+      setUserId(firstUser?.id ?? '');
+    });
+  }, []);
 
   return { users, userId, setUserId };
 }
