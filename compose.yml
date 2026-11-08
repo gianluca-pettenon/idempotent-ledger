@@ -34,7 +34,7 @@ services:
       test: ["CMD-SHELL", "curl -sf http://localhost:2113/health/live"]
 
   mongodb:
-    image: mongo:8.3
+    image: mongo:9.0
     restart: unless-stopped
     command: ["mongod", "--wiredTigerCacheSizeGB", "0.25"]
     ports:
