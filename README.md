@@ -135,15 +135,6 @@ make up
 make migrate
 ```
 
-| Service | URL |
-| --- | --- |
-| Web | <http://localhost:3000> |
-| API docs | <http://localhost:3001/api/docs> |
-| KurrentDB UI | <http://localhost:2113> |
-
-In the web app, pick an account and run the concurrency lab. With an idempotency key, four parallel requests collapse into one; without it all four apply and none is lost.
-
-Stop everything with:
-
 ```bash
 make down
+```
