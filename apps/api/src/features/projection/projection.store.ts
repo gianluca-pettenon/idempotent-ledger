@@ -12,8 +12,8 @@ type TransactionDocument = {
   type: string;
   amount: number;
   counterpartyAccountId?: string;
-  createdAt: Date;
   version: number;
+  createdAt: Date;
 };
 
 export const accounts = readModel.collection<AccountDocument>('accounts');

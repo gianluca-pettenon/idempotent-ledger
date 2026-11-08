@@ -62,7 +62,7 @@ flowchart LR
     owners["accounts projector"]
     statements["statements projector"]
     accounts[("accounts<br/>_id, ownerName")]
-    transactions[("transactions<br/>_id = eventId, accountId, type, amount, counterpartyAccountId")]
+    transactions[("transactions<br/>_id, accountId, type, amount, counterpartyAccountId, version, createdAt")]
 
     created -- "owner, once" --> owners
     owners --> accounts

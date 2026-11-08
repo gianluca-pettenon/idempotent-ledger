@@ -27,11 +27,11 @@ export const statementsProjector: Projector = {
         : undefined;
     const line = {
       accountId,
+      type: TRANSACTION_TYPE[event.type],
       amount,
       counterpartyAccountId,
-      type: TRANSACTION_TYPE[event.type],
-      createdAt: recorded.created,
       version: Number(recorded.revision),
+      createdAt: recorded.created,
     };
 
     return transactions.updateOne(

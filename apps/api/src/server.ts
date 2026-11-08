@@ -2,7 +2,7 @@ import { ledgerRoutes } from '@api/features/ledger/ledger.routes';
 import { projectionRoutes } from '@api/features/projection/projection.routes';
 import { openapi } from '@elysia/openapi';
 import { cors } from '@elysiajs/cors';
-import { Elysia } from 'elysia';
+import { Elysia, StatusMap } from 'elysia';
 
 export const app = new Elysia({ prefix: '/api' })
   .use(
@@ -12,19 +12,23 @@ export const app = new Elysia({ prefix: '/api' })
     }),
   )
   .use(openapi({ path: '/docs' }))
+  .use(ledgerRoutes)
+  .use(projectionRoutes)
   .onError(({ code, error, set }) => {
     if (code !== 'UNKNOWN') {
       return;
     }
 
-    set.status = typeof error.cause === 'number' ? error.cause : 500;
+    set.status =
+      typeof error.cause === 'number'
+        ? error.cause
+        : StatusMap['Internal Server Error'];
 
     return { message: error.message };
-  })
-  .use(ledgerRoutes)
-  .use(projectionRoutes);
+  });
 
 if (import.meta.main) {
-  app.listen(Number(Bun.env.API_PORT));
-  console.log(`API ready at http://localhost:${Bun.env.API_PORT}`);
+  app.listen(Number(Bun.env.API_PORT), ({ hostname, port }) => {
+    console.log(`API ready at ${hostname}:${port}`);
+  });
 }
