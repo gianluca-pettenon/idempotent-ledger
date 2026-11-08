@@ -1,24 +1,5 @@
-x-backend: &backend
-  image: banking-ledger-api
-  build:
-    context: .
-    dockerfile: apps/api/Dockerfile
-  restart: unless-stopped
-  environment: &backend-env
-    KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
-    MONGODB_URL: mongodb://mongodb:27017/banking-ledger
-  depends_on:
-    kurrentdb:
-      condition: service_healthy
-    mongodb:
-      condition: service_healthy
-
-x-healthcheck: &healthcheck
-  interval: 5s
-  timeout: 5s
-  retries: 10
-
 services:
+
   kurrentdb:
     image: kurrentplatform/kurrentdb:26.2
     restart: unless-stopped
@@ -30,8 +11,10 @@ services:
     volumes:
       - kurrentdb:/var/lib/kurrentdb
     healthcheck:
-      <<: *healthcheck
       test: ["CMD-SHELL", "curl -sf http://localhost:2113/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   mongodb:
     image: mongo:9.0
@@ -42,21 +25,45 @@ services:
     volumes:
       - mongodb:/data/db
     healthcheck:
-      <<: *healthcheck
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   api:
-    <<: *backend
+    image: banking-ledger-api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
     ports:
       - "${API_PORT}:${API_PORT}"
     environment:
-      <<: *backend-env
+      KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
+      MONGODB_URL: mongodb://mongodb:27017/banking-ledger
       API_PORT: ${API_PORT}
       WEB_ORIGIN: http://localhost:${PORT}
+    depends_on:
+      kurrentdb:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
 
   projections:
-    <<: *backend
+    image: banking-ledger-api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
     command: ["run", "apps/api/src/features/projection/projections.ts"]
+    environment:
+      KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
+      MONGODB_URL: mongodb://mongodb:27017/banking-ledger
+    depends_on:
+      kurrentdb:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
     deploy:
       replicas: 2
 
