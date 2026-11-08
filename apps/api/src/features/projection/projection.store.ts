@@ -2,7 +2,7 @@ import { MongoClient } from "mongodb";
 
 const readModel = new MongoClient(Bun.env.MONGODB_URL as string, { ignoreUndefined: true }).db();
 
-type AccountDocument = { _id: string; ownerName: string; balance: number; version: number };
+type AccountDocument = { _id: string; ownerName: string };
 
 type TransactionDocument = {
 	_id: string;

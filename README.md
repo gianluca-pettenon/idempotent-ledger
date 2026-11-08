@@ -13,17 +13,18 @@ flowchart LR
     client([Client])
     api["api<br/>decides on the stream's fold"]
     kurrent[("KurrentDB<br/>event streams")]
-    balances["balances projector"]
+    owners["accounts projector"]
     statements["statements projector"]
     mongo[("MongoDB<br/>accounts, transactions")]
 
     client -- "POST (commands)" --> api
     api -- append --> kurrent
-    kurrent -- "consumer group: balances" --> balances
+    kurrent -- "consumer group: accounts" --> owners
     kurrent -- "consumer group: statements" --> statements
-    balances -- accounts --> mongo
+    owners -- accounts --> mongo
     statements -- transactions --> mongo
     client -- "GET (queries)" --> api
+    api -- "last event (balance)" --> kurrent
     api -- find --> mongo
 ```
 
@@ -58,23 +59,22 @@ Each view of the read model has its own projector and its own persistent subscri
 flowchart LR
     created["AccountCreated"]
     movement["Money* / Transfer*"]
-    balances["balances projector"]
+    owners["accounts projector"]
     statements["statements projector"]
-    accounts[("accounts<br/>_id, ownerName, balance, version")]
+    accounts[("accounts<br/>_id, ownerName")]
     transactions[("transactions<br/>_id = eventId, accountId, type, amount, counterpartyAccountId")]
 
-    created -- "insert, balance 0" --> balances
-    movement -- "balance carried by the event, newest revision wins" --> balances
-    balances --> accounts
+    created -- "owner, once" --> owners
+    owners --> accounts
     movement -- "one line per event" --> statements
     statements --> transactions
 ```
 
 So one view can fail, lag, be rebuilt or be deployed without touching the others, and a new view (a report, notifications) starts from the first event and gets the whole history. The counterparty's name is joined at read time (`$lookup` on `accounts`), so the statements projector depends on no other view.
 
-Replicas mean events can arrive out of order or twice, so every write is order-independent and idempotent: statement lines are upserted by event id, and each movement carries the balance it leaves behind, applied only when its revision is newer than the account's `version`.
+Replicas mean events can arrive out of order or twice, so every write is order-independent and idempotent: statement lines are upserted by event id, and the account document is written once from `AccountCreated`. Balance is not in the read model. `GET /accounts/:id` reads the last event of `Account-{id}`, the same snapshot the commands use, so a lagging projection cannot serve a stale balance. The statement can still be a few events behind that snapshot.
 
-The read model is disposable: drop a collection and reset its consumer group to the start, and its projector rebuilds it from the events. Reads are eventually consistent, typically a few milliseconds behind the writes, and the two views may briefly disagree with each other.
+The read model is disposable: drop a collection and reset its consumer group to the start, and its projector rebuilds it from the events. The statement is eventually consistent, typically a few milliseconds behind the writes.
 
 ## A command
 
@@ -125,8 +125,8 @@ apps/api/src/
       projection.store.ts           MongoDB collections
       projections.ts                runs every projector, one consumer group each
       projectors/
-        balances.projector.ts       accounts view: owner and balance
-        statements.projector.ts     transactions view: one line per movement
+        accounts.projector.ts        accounts view: owner
+        statements.projector.ts      transactions view: one line per movement
       projection.routes.ts          GET /accounts, /accounts/:id
 
 apps/api/tests/features/ledger/ledger.test.ts   end-to-end against real KurrentDB and MongoDB
@@ -169,7 +169,7 @@ covered
 
 not covered
   closing the books per period, idempotency-record expiry, input validation beyond the amount
-  read-your-writes on queries, currencies/FX, authentication
+  read-your-writes on the statement, currencies/FX, authentication
   external payment rails, HA/DR
 ```
 

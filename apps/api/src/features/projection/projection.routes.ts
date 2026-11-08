@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import { loadAccount } from "@api/features/ledger/ledger.store";
 import { accounts, transactions } from "@api/features/projection/projection.store";
 
 export const projectionRoutes = new Elysia()
@@ -19,15 +20,18 @@ export const projectionRoutes = new Elysia()
 				throw new Error(`Account ${accountId} not found`, { cause: 404 });
 			}
 
-			const lines = await transactions
-				.aggregate([
-					{ $match: { accountId } },
-					{ $sort: { version: -1 } },
-					{ $lookup: { from: "accounts", localField: "counterpartyAccountId", foreignField: "_id", as: "counterparty" } },
-					{ $project: { _id: 0, id: "$_id", type: 1, amount: 1, createdAt: 1, counterpartyAccountId: 1, counterpartyName: { $first: "$counterparty.ownerName" } } },
-				])
-				.toArray();
+			const [{ balance }, lines] = await Promise.all([
+				loadAccount(accountId),
+				transactions
+					.aggregate([
+						{ $match: { accountId } },
+						{ $sort: { version: -1 } },
+						{ $lookup: { from: "accounts", localField: "counterpartyAccountId", foreignField: "_id", as: "counterparty" } },
+						{ $project: { _id: 0, id: "$_id", type: 1, amount: 1, createdAt: 1, counterpartyAccountId: 1, counterpartyName: { $first: "$counterparty.ownerName" } } },
+					])
+					.toArray(),
+			]);
 
-			return { data: { balance: account.balance, transactions: lines } };
+			return { data: { balance, transactions: lines } };
 		},
 	);

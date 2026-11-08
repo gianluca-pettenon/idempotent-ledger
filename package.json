@@ -1,5 +1,5 @@
 {
-  "name": "banking-ledger",
+  "name": "idempotent-ledger",
   "version": "1.0.0",
   "private": true,
   "workspaces": [

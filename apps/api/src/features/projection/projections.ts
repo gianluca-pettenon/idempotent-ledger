@@ -8,7 +8,7 @@ import {
 } from "@kurrent/kurrentdb-client";
 import type { AccountEvent } from "@api/features/ledger/ledger.events";
 import { ACCOUNT_STREAM, store } from "@api/features/ledger/ledger.store";
-import { balancesProjector } from "@api/features/projection/projectors/balances.projector";
+import { accountsProjector } from "@api/features/projection/projectors/accounts.projector";
 import { statementsProjector } from "@api/features/projection/projectors/statements.projector";
 
 export type Projector = {
@@ -17,7 +17,7 @@ export type Projector = {
 	project: (event: AccountEvent, recorded: RecordedEvent) => Promise<unknown>;
 };
 
-const PROJECTORS = [balancesProjector, statementsProjector];
+const PROJECTORS = [accountsProjector, statementsProjector];
 
 async function createGroup(name: string) {
 	try {
