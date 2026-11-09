@@ -8,13 +8,13 @@ An event-sourced ledger with CQRS. It demonstrates idempotent commands, optimist
 
 The write and read sides are separate processes that only meet through the event store.
 
-| Component | Role | Technology |
-| --- | --- | --- |
-| **KurrentDB** ([formerly EventStoreDB](https://www.kurrent.io/)) | Source of truth: every fact is an immutable event | KurrentDB 26.2 |
-| **MongoDB** | Disposable read model: account owners and statement lines | MongoDB 9.0 |
-| **api** | Decides and appends commands, answers queries | Bun, Elysia |
-| **projections** | Runs every projector, each in its own KurrentDB consumer group | Bun (same image as `api`) |
-| **web** | Account view and concurrency lab | React 19, Vite, Tailwind, served by Caddy |
+| Component | Role |
+| --- | --- |
+| **KurrentDB** ([formerly EventStoreDB](https://www.kurrent.io/)) | Source of truth: every fact is an immutable event |
+| **MongoDB** | Disposable read model: account owners and statement lines |
+| **api** | Decides and appends commands, answers queries |
+| **projections** | Runs every projector, each in its own KurrentDB consumer group |
+| **web** | Account view and concurrency lab |
 
 `api` and `projections` hold no state. Optimistic concurrency keeps concurrent API writers consistent, and consumer groups share events across projection replicas (`compose.yml` runs two).
 
