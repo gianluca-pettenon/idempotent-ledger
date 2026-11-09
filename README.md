@@ -1,22 +1,20 @@
 # Idempotent Ledger
 
-An event-sourced ledger with CQRS. It demonstrates idempotent commands, optimistic concurrency, atomic multi-account writes and a rebuildable read model. It is not a payment rail or a bank core.
+An event-sourced ledger with CQRS. It shows idempotent commands, optimistic concurrency, atomic multi-account writes and a rebuildable read model. It is not a payment rail or a bank core.
 
 ![Preview](./apps/web/public/preview.png)
 
 ## Architecture
 
-The write and read sides are separate processes that only meet through the event store.
+The write side and the read side are separate processes. They meet only through the event store. Neither holds state: concurrent writers stay consistent through optimistic concurrency, and projection replicas share a consumer group's events (`compose.yml` runs two).
 
 | Component | Role |
 | --- | --- |
-| **KurrentDB** ([formerly EventStoreDB](https://www.kurrent.io/)) | Source of truth: every fact is an immutable event |
-| **MongoDB** | Disposable read model: account owners and statement lines |
-| **api** | Decides and appends commands, answers queries |
-| **projections** | Runs every projector, each in its own KurrentDB consumer group |
-| **web** | Account view and concurrency lab |
-
-`api` and `projections` hold no state. Optimistic concurrency keeps concurrent API writers consistent, and consumer groups share events across projection replicas (`compose.yml` runs two).
+| **KurrentDB** ([formerly EventStoreDB](https://www.kurrent.io/)) | Source of truth. Every fact is an immutable event. |
+| **MongoDB** | Disposable read model: account owners and statement lines. |
+| **api** | Decides, appends, and answers queries. |
+| **projections** | One projector per view, each with its own KurrentDB consumer group. |
+| **web** | Account view and concurrency lab. |
 
 ```mermaid
 flowchart LR
@@ -40,7 +38,7 @@ flowchart LR
 
 ## Event model
 
-There is one stream per account, and every event carries its `accountId`. An account exists once its stream holds `AccountCreated`.
+One stream per account. The account exists once the stream holds `AccountCreated`. Every event carries its `accountId` and the balance it leaves behind, so the last event is the account. Loading an account reads that single event, at any stream length. Commands read the event store. A lagging projection cannot authorize a withdrawal the stream would refuse.
 
 ```text
 Account-{accountId}    AccountCreated   { accountId, ownerName, balance }
@@ -51,69 +49,30 @@ Account-{accountId}    AccountCreated   { accountId, ownerName, balance }
 Idempotency-{key}      RequestProcessed { balance }
 ```
 
-Every event carries the balance it leaves behind, so each one is a snapshot written in the same atomic append. Loading an account reads a single event, its last, whatever the stream's length. Commands load from the event store and never from MongoDB, so a lagging read model cannot let a withdrawal or transfer through without funds.
-
-Corrections are new events, never edits. Streams grow forever; at scale they would be closed per period, with a closing event carrying the balance into a new stream.
-
-Accounts are not opened through the API. `apps/api/scripts/migrate.ts` is a one-off migration that appends `AccountCreated` for three demo accounts. It can be re-run safely, because each append expects `no_stream`.
+Corrections are new events. Streams grow without bound. Closing the books, later, would be an event that carries the balance into a new stream.
 
 ## Commands
 
-```mermaid
-flowchart TD
-    start(["POST with Idempotency-Key: K"])
-    key{"1. Idempotency-K<br/>exists?"}
-    replay(["replay saved result<br/>outcome: duplicate"])
-    read["2. read the last event of each account<br/>balance and revision"]
-    decide{"3. enough funds?<br/>(withdrawals, transfers)"}
-    invalid(["422"])
-    append{"4. one atomic multi-stream append<br/>account streams at expected revisions<br/>Idempotency-K at no_stream"}
-    done(["outcome: processed"])
-    busy(["409 after 10 attempts"])
-
-    start --> key
-    key -- "yes" --> replay
-    key -- "no" --> read
-    read --> decide
-    decide -- "no" --> invalid
-    decide -- "yes" --> append
-    append -- "committed" --> done
-    append -- "wrong expected revision" --> key
-    key -. "attempts exhausted" .-> busy
-```
-
-- **Optimistic concurrency** uses the stream revision. There are no locks: a conflicting append fails and the command retries from a fresh read, up to 10 attempts.
-- **Atomic transfers**: both legs and the idempotency record commit together or not at all (`multiStreamAppend`, KurrentDB 25.1+).
-- **Idempotency** is a stream that can only be created once. Concurrent requests with the same key race on `no_stream`; the loser retries, finds the record and replays it.
-- **The idempotency record lives in the event store** because it shares the atomic append with the money. A key kept in Redis or the read model would be a dual write: a crash between the two either loses the key, moving money twice on retry, or keeps a key for an append that never happened.
-
-`Idempotency-Key` is optional. Without it every request is processed; with it the request takes effect once and retries replay the saved result. Only committed commands are recorded, so a request rejected with `422` is evaluated again on retry.
+- **Optimistic concurrency** is the stream revision. There are no locks. A conflicting append fails, the command reloads and retries, up to 10 times, then answers `409`.
+- **A transfer is one `multiStreamAppend`** (KurrentDB 25.1+). Both legs and the idempotency record commit together, or not at all.
+- **Idempotency is a stream**, `Idempotency-{key}`, that can be created only once. Two requests with the same key race on `no_stream`. The loser retries, finds the record and replays the saved balance. The record is written in the same append as the money. A key kept beside the append, in Redis or MongoDB, splits that write: a crash between the two either drops the key, so the retry moves money twice, or keeps a key for an append that never happened.
+- **`Idempotency-Key` is optional.** Without it, every request is applied. With it, the effect happens once. A `422` for insufficient funds is not recorded, so the retry is decided again.
 
 ## Read model
 
-Each view has its own projector and its own persistent subscription on `$all`, filtered to `Account-*`. KurrentDB keeps each group's checkpoint, retries failed events and parks them after too many attempts, so one broken view does not stall the others.
+Each view has its own persistent subscription on `$all`, filtered to `Account-*`. KurrentDB stores the checkpoint, retries a failed event and parks it, so one broken view does not stall the others.
 
-```mermaid
-flowchart LR
-    created["AccountCreated"]
-    movement["Money* / Transfer*"]
-    accountsProjector["accounts projector"]
-    statementsProjector["statements projector"]
-    accounts[("accounts<br/>_id, ownerName")]
-    transactions[("transactions<br/>_id, accountId, type, amount,<br/>counterpartyAccountId, version, createdAt")]
+`accounts` stores `{ _id, ownerName }`, written once from `AccountCreated`. `transactions` stores one line per event, upserted by event id and ordered by stream revision:
 
-    created -- "owner" --> accountsProjector
-    created -- "opening line" --> statementsProjector
-    movement -- "one line per event" --> statementsProjector
-    accountsProjector --> accounts
-    statementsProjector --> transactions
+```text
+_id, accountId, type, amount, counterpartyAccountId, version, createdAt
 ```
 
-Replicas mean events can arrive out of order or twice, so writes are idempotent and order-independent: statement lines are upserted by event id, and the account document is keyed by account id. The statement is sorted by stream revision, and the counterparty's name is joined at read time (`$lookup` on `accounts`), so the statements projector depends on no other view.
+The counterparty name is a `$lookup` at read time, so the statements projector depends on no other view. Replicas can deliver an event twice or out of order. Both writes stay correct without coordination.
 
-Balance is deliberately not in the read model. `GET /api/accounts/:accountId` reads it from the last event of the stream, so it is never stale, while the statement can trail it slightly.
+Balance is not projected. `GET /api/accounts/:accountId` reads the last event, so the balance is the stream's. The statement can trail it by a few events.
 
-To rebuild a view, drop its collection and reset its consumer group to the start. A new view gets the whole history the same way.
+Drop a collection and reset its consumer group to rebuild that view. A new view starts the same way and receives the whole history.
 
 ## Getting started
 
@@ -125,16 +84,8 @@ PORT=3000
 API_PORT=3001
 ```
 
-Start the stack, then create the demo accounts:
-
 ```bash
-make up
-```
-
-```bash
-make migrate
-```
-
-```bash
+make up       # stack
+make migrate  # three demo accounts; safe to re-run, each append expects no_stream
 make down
 ```
