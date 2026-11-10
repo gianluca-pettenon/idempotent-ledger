@@ -8,9 +8,6 @@ COPY packages ./packages
 
 RUN bun install --frozen-lockfile
 
-ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-
 RUN bun run --filter '@idempotent-ledger/web' build
 
 FROM caddy:2-alpine

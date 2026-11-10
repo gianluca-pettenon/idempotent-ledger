@@ -42,20 +42,8 @@ const REQUEST_BUILDER: Record<
   }),
 };
 
-function getApiBaseUrl() {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-
-  if (!baseUrl) {
-    return '/api';
-  }
-
-  return baseUrl.replace(/\/$/, '');
-}
-
-const API_BASE_URL = getApiBaseUrl();
-
 async function request<T>(path: string, options: RequestOptions = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`/api${path}`, {
     ...options,
     headers: {
       Accept: 'application/json',

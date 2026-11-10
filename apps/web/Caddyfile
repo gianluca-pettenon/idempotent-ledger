@@ -1,5 +1,11 @@
-:{$PORT}
+:{$PORT} {
+	handle /api/* {
+		reverse_proxy api:{$API_PORT}
+	}
 
-root * /srv
-file_server
-try_files {path} /index.html
+	handle {
+		root * /srv
+		file_server
+		try_files {path} /index.html
+	}
+}

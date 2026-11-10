@@ -71,12 +71,11 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-      args:
-        VITE_API_BASE_URL: http://localhost:${API_PORT}/api
     ports:
       - "${PORT}:${PORT}"
     environment:
       PORT: ${PORT}
+      API_PORT: ${API_PORT}
     depends_on:
       - api
 
