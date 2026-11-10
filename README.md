@@ -5,23 +5,22 @@ An event-sourced ledger with CQRS. It shows idempotent commands, optimistic conc
 ![Preview](./apps/web/public/preview.png)
 
 ```mermaid
-flowchart LR
-    client([Client])
-    api["api"]
-    kurrent[("KurrentDB<br/>event streams")]
-    accounts["accounts projector"]
-    statements["statements projector"]
-    mongo[("MongoDB<br/>accounts, transactions")]
+flowchart TB
+    web([web])
+    api[api]
+    kurrent[(KurrentDB)]
+    accounts[accounts projector]
+    statements[statements projector]
+    mongo[(MongoDB)]
 
-    client -- "POST (commands)" --> api
-    api -- "atomic append" --> kurrent
-    kurrent -- "consumer group: accounts" --> accounts
-    kurrent -- "consumer group: statements" --> statements
-    accounts --> mongo
-    statements --> mongo
-    client -- "GET (queries)" --> api
-    api -- "last event (balance)" --> kurrent
-    api -- "owners, statement" --> mongo
+    web -- "POST commands" --> api
+    api -- "append events" --> kurrent
+    kurrent -- "consumer group" --> accounts
+    kurrent -- "consumer group" --> statements
+    accounts -- "writes owners" --> mongo
+    statements -- "writes statement lines" --> mongo
+    web -- "GET the screen" --> api
+    api -- "owners and statement" --> mongo
 ```
 
 ## Commands
