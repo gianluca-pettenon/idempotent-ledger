@@ -1,13 +1,13 @@
 import { CONCURRENCY_DEMO, OperationKind } from '@idempotent-ledger/shared';
 import { useState } from 'react';
 
-import { AccountSelector } from '@/app/components/AccountSelector';
-import { BalanceCard } from '@/app/components/BalanceCard';
-import { OperationForm } from '@/app/components/OperationForm';
-import { useAccountBalance } from '@/app/hooks/useAccountBalance';
-import { useUsers } from '@/app/hooks/useUsers';
-import { runConcurrentRequests } from '@/app/lib/api';
-import type { Operation, RunEntry } from '@/app/lib/types';
+import { AccountSelector } from '@/components/AccountSelector';
+import { BalanceCard } from '@/components/BalanceCard';
+import { OperationForm } from '@/components/OperationForm';
+import { useAccountBalance } from '@/hooks/useAccountBalance';
+import { useUsers } from '@/hooks/useUsers';
+import { runConcurrentRequests } from '@/lib/api';
+import type { Operation, RunEntry } from '@/lib/types';
 
 export function App() {
   const { users, userId, setUserId } = useUsers();

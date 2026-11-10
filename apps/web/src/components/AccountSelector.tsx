@@ -1,7 +1,6 @@
 import { ACCOUNT, CONCURRENCY } from '@idempotent-ledger/terms';
-
-import type { User } from '@/app/lib/types';
-import { Select } from '@/shared/ui';
+import { Select } from '@/components/Select';
+import type { User } from '@/lib/types';
 
 type AccountSelectorProps = {
   users: User[];

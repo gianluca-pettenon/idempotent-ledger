@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
-import { fetchAccount } from '@/app/lib/api';
-import type { Transaction } from '@/app/lib/types';
+import { fetchAccount } from '@/lib/api';
+import type { Transaction } from '@/lib/types';
 
 type AccountState = {
   balance: number | null;

@@ -1,6 +1,6 @@
 import { CONCURRENCY } from '@idempotent-ledger/terms';
 
-import type { RunEntry } from '@/app/lib/types';
+import type { RunEntry } from '@/lib/types';
 
 type RequestResultsProps = {
   entries: RunEntry[];

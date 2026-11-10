@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { cn } from '@/shared/lib/cn';
+import { cn } from '@/lib/cn';
 
 export type ButtonVariant = 'primary' | 'danger' | 'info' | 'outline';
 

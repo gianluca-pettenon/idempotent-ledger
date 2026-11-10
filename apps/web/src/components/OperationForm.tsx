@@ -1,9 +1,10 @@
 import { OPERATION_KINDS, OperationKind } from '@idempotent-ledger/shared';
 import { CONCURRENCY, FORM, OPERATION } from '@idempotent-ledger/terms';
 import type { SubmitEvent } from 'react';
-import { RequestResults } from '@/app/components/RequestResults';
-import type { Operation, RunEntry, User } from '@/app/lib/types';
-import { Button, type ButtonVariant, Select } from '@/shared/ui';
+import { Button, type ButtonVariant } from '@/components/Button';
+import { RequestResults } from '@/components/RequestResults';
+import { Select } from '@/components/Select';
+import type { Operation, RunEntry, User } from '@/lib/types';
 
 type OperationFormProps = {
   operation: Operation;

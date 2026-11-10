@@ -1,8 +1,7 @@
 import { ACCOUNT, STATEMENT } from '@idempotent-ledger/terms';
-
-import type { Transaction } from '@/app/lib/types';
-import { cn } from '@/shared/lib/cn';
-import { formatDate, formatUsd } from '@/shared/lib/format';
+import { cn } from '@/lib/cn';
+import { formatDate, formatUsd } from '@/lib/format';
+import type { Transaction } from '@/lib/types';
 
 type BalanceCardProps = {
   balance: number | null;

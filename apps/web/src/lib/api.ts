@@ -1,6 +1,6 @@
 import { CONCURRENCY_DEMO, OperationKind } from '@idempotent-ledger/shared';
 
-import type { Account, Operation, RunEntry, User } from '@/app/lib/types';
+import type { Account, Operation, RunEntry, User } from '@/lib/types';
 
 type RequestOptions = RequestInit & {
   headers?: HeadersInit;
