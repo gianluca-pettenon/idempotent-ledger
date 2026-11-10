@@ -1,4 +1,4 @@
-import type { OperationKind as Operation } from '@banking-ledger/shared';
+import type { OperationKind as Operation } from '@idempotent-ledger/shared';
 
 export type { Operation };
 

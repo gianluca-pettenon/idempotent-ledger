@@ -1,5 +1,5 @@
 {
-  "name": "@banking-ledger/api",
+  "name": "@idempotent-ledger/api",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "test": "bun test tests"
   },
   "dependencies": {
-    "@banking-ledger/shared": "workspace:*",
+    "@idempotent-ledger/shared": "workspace:*",
     "@elysia/openapi": "1.4.16",
     "@elysiajs/cors": "1.4.2",
     "@kurrent/kurrentdb-client": "1.3.1",

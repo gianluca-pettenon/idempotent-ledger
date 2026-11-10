@@ -1,5 +1,5 @@
-import { OPERATION_KINDS, OperationKind } from '@banking-ledger/shared';
-import { CONCURRENCY, FORM, OPERATION } from '@banking-ledger/terms';
+import { OPERATION_KINDS, OperationKind } from '@idempotent-ledger/shared';
+import { CONCURRENCY, FORM, OPERATION } from '@idempotent-ledger/terms';
 import type { SubmitEvent } from 'react';
 import { RequestResults } from '@/app/components/RequestResults';
 import type { Operation, RunEntry, User } from '@/app/lib/types';

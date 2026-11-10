@@ -1,4 +1,4 @@
-import { CONCURRENCY_DEMO, OperationKind } from '@banking-ledger/shared';
+import { CONCURRENCY_DEMO, OperationKind } from '@idempotent-ledger/shared';
 import { useState } from 'react';
 
 import { AccountSelector } from '@/app/components/AccountSelector';

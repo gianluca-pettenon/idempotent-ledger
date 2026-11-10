@@ -25,4 +25,4 @@ USER bun
 
 EXPOSE 3001
 
-CMD ["run", "--filter", "@banking-ledger/api", "start"]
+CMD ["run", "--filter", "@idempotent-ledger/api", "start"]

@@ -1,5 +1,5 @@
 {
-  "name": "@banking-ledger/terms",
+  "name": "@idempotent-ledger/terms",
   "private": true,
   "type": "module",
   "exports": {

@@ -1,5 +1,5 @@
 {
-  "name": "@banking-ledger/web",
+  "name": "@idempotent-ledger/web",
   "private": true,
   "type": "module",
   "imports": {
@@ -15,8 +15,8 @@
     "test": "bun test tests"
   },
   "dependencies": {
-    "@banking-ledger/shared": "workspace:*",
-    "@banking-ledger/terms": "workspace:*",
+    "@idempotent-ledger/shared": "workspace:*",
+    "@idempotent-ledger/terms": "workspace:*",
     "@tailwindcss/vite": "4.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",

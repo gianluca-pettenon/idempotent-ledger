@@ -1,4 +1,4 @@
-import { CONCURRENCY } from '@banking-ledger/terms';
+import { CONCURRENCY } from '@idempotent-ledger/terms';
 
 import type { RunEntry } from '@/app/lib/types';
 

@@ -2,7 +2,7 @@ import {
   AMOUNT_PLACEHOLDER,
   CURRENCY,
   DISPLAY_LOCALE,
-} from '@banking-ledger/shared';
+} from '@idempotent-ledger/shared';
 
 export function formatUsd(value: number) {
   return value.toLocaleString(DISPLAY_LOCALE, {

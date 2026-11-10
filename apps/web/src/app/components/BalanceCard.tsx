@@ -1,4 +1,4 @@
-import { ACCOUNT, STATEMENT } from '@banking-ledger/terms';
+import { ACCOUNT, STATEMENT } from '@idempotent-ledger/terms';
 
 import type { Transaction } from '@/app/lib/types';
 import { cn } from '@/shared/lib/cn';

@@ -1,4 +1,4 @@
-import { CONCURRENCY_DEMO, OperationKind } from '@banking-ledger/shared';
+import { CONCURRENCY_DEMO, OperationKind } from '@idempotent-ledger/shared';
 
 import type { Account, Operation, RunEntry, User } from '@/app/lib/types';
 
