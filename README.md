@@ -4,6 +4,26 @@ An event-sourced ledger with CQRS. It shows idempotent commands, optimistic conc
 
 ![Preview](./apps/web/public/preview.png)
 
+```mermaid
+flowchart LR
+    client([Client])
+    api["api"]
+    kurrent[("KurrentDB<br/>event streams")]
+    accounts["accounts projector"]
+    statements["statements projector"]
+    mongo[("MongoDB<br/>accounts, transactions")]
+
+    client -- "POST (commands)" --> api
+    api -- "atomic append" --> kurrent
+    kurrent -- "consumer group: accounts" --> accounts
+    kurrent -- "consumer group: statements" --> statements
+    accounts --> mongo
+    statements --> mongo
+    client -- "GET (queries)" --> api
+    api -- "last event (balance)" --> kurrent
+    api -- "owners, statement" --> mongo
+```
+
 ## Commands
 
 - **Optimistic concurrency** is the stream revision. There are no locks. A conflicting append fails, the command reloads and retries, up to 10 times, then answers `409`.
