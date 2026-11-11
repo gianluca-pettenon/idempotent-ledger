@@ -6,11 +6,11 @@ import {
   jsonEvent,
   KurrentDBClient,
   NO_STREAM,
-  StreamNotFoundError,
-  WrongExpectedVersionError,
 } from '@kurrent/kurrentdb-client';
 
-export const store = KurrentDBClient.connectionString(Bun.env.KURRENTDB_URL as string);
+export const store = KurrentDBClient.connectionString(
+  Bun.env.KURRENTDB_URL as string,
+);
 
 export const ACCOUNT_STREAM = 'Account-';
 
@@ -22,34 +22,40 @@ export type Account = {
   balance: number;
   revision: bigint | typeof NO_STREAM;
 };
+
 export type Append = { account: Account; event: AccountEvent };
 export type Response = { balance: number };
 
-async function readLast<T>(streamName: string) {
+type Saved<T> = T & { revision: bigint };
+
+async function readLast<T>(streamName: string): Promise<Saved<T> | undefined> {
+  const read = store.readStream(streamName, {
+    direction: BACKWARDS,
+    fromRevision: END,
+    maxCount: 1,
+  });
+
   try {
-    for await (const { event } of store.readStream(streamName, {
-      direction: BACKWARDS,
-      fromRevision: END,
-      maxCount: 1,
-    })) {
-      return event && { ...(event as T), revision: event.revision };
+    const { value } = await read.next();
+    const event = value?.event;
+
+    if (!event) {
+      return;
     }
+
+    return { ...(event as T), revision: event.revision };
   } catch (error) {
-    if (!(error instanceof StreamNotFoundError)) {
-      throw error;
-    }
+    throw error;
   }
 }
 
 export async function loadAccount(accountId: string): Promise<Account> {
-  const { data, revision } = await readLast<AccountEvent>(
-    accountStream(accountId),
-  );
+  const last = await readLast<AccountEvent>(accountStream(accountId));
 
   return {
     accountId,
-    balance: data.balance ?? 0,
-    revision: revision ?? NO_STREAM,
+    balance: last?.data.balance ?? 0,
+    revision: last?.revision ?? NO_STREAM,
   };
 }
 
@@ -59,31 +65,43 @@ export async function findResponse(key: string) {
   return last?.data;
 }
 
+function accountRequest({ account, event }: Append): AppendStreamRequest {
+  return {
+    streamName: accountStream(account.accountId),
+    expectedState: account.revision,
+    events: [
+      jsonEvent(event)
+    ],
+  };
+}
+
+function idempotencyRequest(
+  key: string,
+  response: Response,
+): AppendStreamRequest {
+  return {
+    streamName: idempotencyStream(key),
+    expectedState: NO_STREAM,
+    events: [
+      jsonEvent({ type: 'RequestProcessed', data: response })
+    ],
+  };
+}
+
 export async function append(
   appends: Append[],
   key: string | null,
   response: Response,
 ) {
-  const requests: AppendStreamRequest[] = appends.map(({ account, event }) => ({
-    streamName: accountStream(account.accountId),
-    expectedState: account.revision,
-    events: [jsonEvent(event)],
-  }));
+  const requests = appends.map(accountRequest);
 
   if (key) {
-    requests.push({
-      streamName: idempotencyStream(key),
-      expectedState: NO_STREAM,
-      events: [jsonEvent({ type: 'RequestProcessed', data: response })],
-    });
+    requests.push(idempotencyRequest(key, response));
   }
 
   try {
     await store.multiStreamAppend(requests);
   } catch (error) {
-    if (error instanceof WrongExpectedVersionError) {
-      return false;
-    }
     throw error;
   }
 
