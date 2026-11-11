@@ -13,32 +13,58 @@ enum Outcome {
 const MAX_ATTEMPTS = 10;
 
 type Decision = { appends: Append[]; balance: number };
+type Result = { balance: number; outcome: Outcome };
+
+export function assertFunds(account: Account, amount: number) {
+  if (account.balance < amount) {
+    throw new Error(`Insufficient funds: ${amount} > ${account.balance}`, {
+      cause: 422,
+    });
+  }
+}
+
+async function replay(key: string | null): Promise<Result | undefined> {
+  if (!key) {
+    return;
+  }
+
+  const previous = await findResponse(key);
+
+  if (previous) {
+    return { ...previous, outcome: Outcome.Duplicate };
+  }
+}
+
+async function commit(
+  key: string | null,
+  decide: () => Promise<Decision>,
+): Promise<Result | undefined> {
+  const { appends, balance } = await decide();
+
+  if (await append(appends, key, { balance })) {
+    return { balance, outcome: Outcome.Processed };
+  }
+}
 
 export async function execute(
   key: string | null,
   decide: () => Promise<Decision>,
 ) {
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const previous = key && (await findResponse(key));
+    const duplicate = await replay(key);
 
-    if (previous) {
-      return { ...previous, outcome: Outcome.Duplicate };
+    if (duplicate) {
+      return duplicate;
     }
 
-    const { appends, balance } = await decide();
+    const processed = await commit(key, decide);
 
-    if (await append(appends, key, { balance })) {
-      return { balance, outcome: Outcome.Processed };
+    if (processed) {
+      return processed;
     }
   }
 
   throw new Error('Account is under heavy contention, retry later', {
     cause: 409,
   });
-}
-
-export function assertFunds(account: Account, amount: number) {
-  if (account.balance < amount) {
-    throw new Error('Insufficient balance', { cause: 422 });
-  }
 }
