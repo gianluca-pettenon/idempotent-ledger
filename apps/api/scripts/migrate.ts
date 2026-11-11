@@ -4,18 +4,23 @@ import { NO_STREAM } from '@kurrent/kurrentdb-client';
 
 const accounts = [
   {
-    accountId: '01936b6e-8c1a-7000-8000-00000000000a',
+    accountId: '01a1cb31-e58b-735a-8791-bbc1dccba6c0',
     ownerName: 'User A',
     balance: 0,
   },
   {
-    accountId: '01936b6e-8c1a-7000-8000-00000000000b',
+    accountId: '01a1cb32-2230-75de-8851-21eea78b0a57',
     ownerName: 'User B',
     balance: 0,
   },
   {
-    accountId: '01936b6e-8c1a-7000-8000-00000000000c',
+    accountId: '01a1cb32-64d6-7259-aff4-81d49c9dd032',
     ownerName: 'User C',
+    balance: 0,
+  },
+  {
+    accountId: '01a1cb33-249c-713a-98cc-86dff22b26d2',
+    ownerName: 'User D',
     balance: 0,
   },
 ];
