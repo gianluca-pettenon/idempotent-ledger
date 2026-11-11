@@ -17,5 +17,4 @@ type TransactionDocument = {
 };
 
 export const accounts = readModel.collection<AccountDocument>('accounts');
-export const transactions =
-  readModel.collection<TransactionDocument>('transactions');
+export const transactions = readModel.collection<TransactionDocument>('transactions');

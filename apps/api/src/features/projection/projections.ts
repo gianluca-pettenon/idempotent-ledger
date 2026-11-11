@@ -3,7 +3,6 @@ import { ACCOUNT_STREAM, store } from '@api/features/ledger/ledger.store';
 import { accountsProjector } from '@api/features/projection/projectors/accounts.projector';
 import { statementsProjector } from '@api/features/projection/projectors/statements.projector';
 import {
-  PersistentSubscriptionExistsError,
   persistentSubscriptionToAllSettingsFromDefaults,
   RETRY,
   type RecordedEvent,
@@ -29,9 +28,7 @@ async function createGroup(name: string) {
       },
     );
   } catch (error) {
-    if (!(error instanceof PersistentSubscriptionExistsError)) {
-      throw error;
-    }
+    throw error;
   }
 }
 
@@ -40,10 +37,12 @@ async function consume({ name, project }: Projector) {
 
   for await (const resolved of subscription) {
     try {
+
       await project(
         resolved.event as unknown as AccountEvent,
         resolved.event as RecordedEvent,
       );
+
       await subscription.ack(resolved);
     } catch (error) {
       await subscription.nack(RETRY, String(error), resolved);
