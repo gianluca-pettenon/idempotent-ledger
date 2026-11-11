@@ -18,16 +18,10 @@ type Transfer = Movement & {
 };
 
 export type AccountEvent =
-  | {
-      type: EventType.AccountCreated;
-      data: { accountId: string; ownerName: string; balance: number };
-    }
+  | { type: EventType.AccountCreated; data: { accountId: string; ownerName: string; balance: number } }
   | { type: EventType.MoneyDeposited; data: Movement }
   | { type: EventType.MoneyWithdrawn; data: Movement }
   | { type: EventType.TransferSent; data: Transfer }
   | { type: EventType.TransferReceived; data: Transfer };
 
-export type MovementEvent = Exclude<
-  AccountEvent,
-  { type: EventType.AccountCreated }
->;
+export type MovementEvent = Exclude<AccountEvent, { type: EventType.AccountCreated }>;

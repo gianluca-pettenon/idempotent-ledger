@@ -12,6 +12,7 @@ export const deposit = (
     const balance = account.balance + amount;
 
     return {
+      balance,
       appends: [
         {
           account,
@@ -21,6 +22,5 @@ export const deposit = (
           },
         },
       ],
-      balance,
     };
   });

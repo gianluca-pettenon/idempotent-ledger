@@ -15,6 +15,7 @@ export const withdraw = (
     const balance = account.balance - amount;
 
     return {
+      balance,
       appends: [
         {
           account,
@@ -24,6 +25,5 @@ export const withdraw = (
           },
         },
       ],
-      balance,
     };
   });

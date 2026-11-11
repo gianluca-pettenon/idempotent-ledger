@@ -3,8 +3,7 @@ import { transfer } from '@api/features/ledger/commands/transfer';
 import { withdraw } from '@api/features/ledger/commands/withdraw';
 import { Elysia, t } from 'elysia';
 
-const getIdempotencyKey = (request: Request) =>
-  request.headers.get('Idempotency-Key');
+const getIdempotencyKey = (request: Request) => request.headers.get('Idempotency-Key');
 
 export const ledgerRoutes = new Elysia()
   .post(

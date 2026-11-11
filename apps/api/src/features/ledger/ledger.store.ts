@@ -10,9 +10,7 @@ import {
   WrongExpectedVersionError,
 } from '@kurrent/kurrentdb-client';
 
-export const store = KurrentDBClient.connectionString(
-  Bun.env.KURRENTDB_URL as string,
-);
+export const store = KurrentDBClient.connectionString(Bun.env.KURRENTDB_URL as string);
 
 export const ACCOUNT_STREAM = 'Account-';
 
