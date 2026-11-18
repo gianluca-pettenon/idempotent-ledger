@@ -6,6 +6,7 @@ import {
   jsonEvent,
   KurrentDBClient,
   NO_STREAM,
+  WrongExpectedVersionError,
 } from '@kurrent/kurrentdb-client';
 
 export const store = KurrentDBClient.connectionString(
@@ -88,7 +89,7 @@ function idempotencyRequest(
   };
 }
 
-export async function append(
+export function append(
   appends: Append[],
   key: string | null,
   response: Response,
@@ -99,11 +100,13 @@ export async function append(
     requests.push(idempotencyRequest(key, response));
   }
 
-  try {
-    await store.multiStreamAppend(requests);
-  } catch (error) {
-    throw error;
-  }
+  return Promise.try(() => store.multiStreamAppend(requests))
+    .then(() => true)
+    .catch(error => {
+      if (error instanceof WrongExpectedVersionError) {
+        return false;
+      }
 
-  return true;
+      throw error;
+    });
 }
