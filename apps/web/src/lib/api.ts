@@ -70,6 +70,7 @@ async function runRequest(
   idempotencyKey: string | null,
 ): Promise<RunEntry> {
   const startedAt = performance.now();
+  const requestId = crypto.randomUUID();
   const label = `Request ${requestIndex + 1}`;
   const { path, body } = REQUEST_BUILDER[params.operation](params);
   let outcome = 'failed';
@@ -92,6 +93,7 @@ async function runRequest(
 
   return {
     label,
+    id: requestId,
     outcome,
     ms: Math.round(performance.now() - startedAt),
     detail,

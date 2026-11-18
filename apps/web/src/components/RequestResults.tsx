@@ -38,9 +38,10 @@ export function RequestResults({ entries }: RequestResultsProps) {
             key={entry.label}
             className="flex flex-col gap-2 rounded-2xl border border-border/60 bg-surface/70 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
           >
-            <div className="flex items-center gap-2 text-foreground">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 text-foreground">
               <span>{entry.label}</span>
               <span className="text-muted-foreground">·</span>
+              <span className="break-all text-muted-foreground">{entry.id}</span>
               <span
                 className={[
                   'inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]',
@@ -50,7 +51,7 @@ export function RequestResults({ entries }: RequestResultsProps) {
                 {entry.outcome}
               </span>
             </div>
-            <span>{entry.ms}ms</span>
+            <span className="shrink-0">{entry.ms} ms</span>
             {entry.detail ? (
               <span className="w-full text-[11px] text-muted-foreground">
                 {entry.detail}
