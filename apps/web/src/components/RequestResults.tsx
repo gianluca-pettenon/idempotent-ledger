@@ -7,12 +7,11 @@ type RequestResultsProps = {
 };
 
 const OUTCOME_CLASSNAME: Record<string, string> = {
-  processed: 'border-primary/30 bg-primary/10 text-primary',
-  duplicate: 'border-info/30 bg-info/10 text-info',
+  processed: 'text-primary',
+  duplicate: 'text-info',
 };
 
-const FAILED_OUTCOME_CLASSNAME =
-  'border-destructive/30 bg-destructive/10 text-destructive-foreground';
+const FAILED_OUTCOME_CLASSNAME = 'text-destructive-foreground';
 
 function getOutcomeClassName(outcome: string) {
   return OUTCOME_CLASSNAME[outcome] ?? FAILED_OUTCOME_CLASSNAME;
@@ -35,27 +34,22 @@ export function RequestResults({ entries }: RequestResultsProps) {
       <ul className="space-y-2">
         {entries.map(entry => (
           <li
-            key={entry.label}
-            className="flex flex-col gap-2 rounded-2xl border border-border/60 bg-surface/70 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
+            key={entry.id}
+            className="rounded-2xl border border-border/60 bg-surface/70 px-3 py-2.5"
           >
-            <div className="flex min-w-0 flex-wrap items-center gap-2 text-foreground">
-              <span>{entry.label}</span>
-              <span className="text-muted-foreground">·</span>
-              <span className="break-all text-muted-foreground">{entry.id}</span>
-              <span
-                className={[
-                  'inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]',
-                  getOutcomeClassName(entry.outcome),
-                ].join(' ')}
-              >
-                {entry.outcome}
-              </span>
+            <div className="flex items-baseline justify-between gap-4">
+              <p className="min-w-0 break-all text-foreground">
+                {entry.id}{' '}
+                <span className={getOutcomeClassName(entry.outcome)}>
+                  ({entry.outcome.toUpperCase()})
+                </span>
+              </p>
+              <span className="shrink-0 tabular-nums">{entry.ms} ms</span>
             </div>
-            <span className="shrink-0">{entry.ms} ms</span>
             {entry.detail ? (
-              <span className="w-full text-[11px] text-muted-foreground">
+              <p className="mt-1 text-[11px] text-muted-foreground">
                 {entry.detail}
-              </span>
+              </p>
             ) : null}
           </li>
         ))}

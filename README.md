@@ -32,13 +32,7 @@ flowchart TB
 
 ## Getting started
 
-Requires Docker. Create `.env` in the repository root:
-
-```text
-MONGODB_PORT=27017
-PORT=3000
-API_PORT=3001
-```
+Requires Docker. The web listens on `3000`, the API on `3001` and MongoDB on `27017`. Override any of those in a root `.env` (`PORT`, `API_PORT`, `MONGODB_PORT`).
 
 ```bash
 make up       # stack

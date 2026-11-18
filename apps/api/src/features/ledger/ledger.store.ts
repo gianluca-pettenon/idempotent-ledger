@@ -1,5 +1,6 @@
 import type { AccountEvent } from '@api/features/ledger/ledger.events';
 import {
+  AppendConsistencyViolationError,
   type AppendStreamRequest,
   BACKWARDS,
   END,
@@ -108,7 +109,10 @@ export function append(
   return Promise.try(() => store.multiStreamAppend(requests))
     .then(() => true)
     .catch(error => {
-      if (error instanceof WrongExpectedVersionError) {
+      if (
+        error instanceof WrongExpectedVersionError ||
+        error instanceof AppendConsistencyViolationError
+      ) {
         return false;
       }
 

@@ -1,5 +1,8 @@
-services:
+x-ledger-environment: &ledger-environment
+  KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
+  MONGODB_URL: mongodb://mongodb:27017/banking-ledger
 
+services:
   kurrentdb:
     image: kurrentplatform/kurrentdb:26.2
     restart: unless-stopped
@@ -21,7 +24,7 @@ services:
     restart: unless-stopped
     command: ["mongod", "--wiredTigerCacheSizeGB", "0.25"]
     ports:
-      - "${MONGODB_PORT}:27017"
+      - "${MONGODB_PORT:-27017}:27017"
     volumes:
       - mongodb:/data/db
     healthcheck:
@@ -37,12 +40,11 @@ services:
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     ports:
-      - "${API_PORT}:${API_PORT}"
+      - "${API_PORT:-3001}:${API_PORT:-3001}"
     environment:
-      KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
-      MONGODB_URL: mongodb://mongodb:27017/banking-ledger
-      API_PORT: ${API_PORT}
-      WEB_ORIGIN: http://localhost:${PORT}
+      <<: *ledger-environment
+      API_PORT: ${API_PORT:-3001}
+      WEB_ORIGIN: http://localhost:${PORT:-3000}
     depends_on:
       kurrentdb:
         condition: service_healthy
@@ -56,9 +58,7 @@ services:
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     command: ["run", "apps/api/src/features/projection/projections.ts"]
-    environment:
-      KURRENTDB_URL: kurrentdb://kurrentdb:2113?tls=false
-      MONGODB_URL: mongodb://mongodb:27017/banking-ledger
+    environment: *ledger-environment
     depends_on:
       kurrentdb:
         condition: service_healthy
@@ -72,10 +72,10 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     ports:
-      - "${PORT}:${PORT}"
+      - "${PORT:-3000}:${PORT:-3000}"
     environment:
-      PORT: ${PORT}
-      API_PORT: ${API_PORT}
+      PORT: ${PORT:-3000}
+      API_PORT: ${API_PORT:-3001}
     depends_on:
       - api
 

@@ -8,7 +8,7 @@ export const app = new Elysia({ prefix: '/api' })
   .use(
     cors({
       origin: Bun.env.WEB_ORIGIN,
-      allowedHeaders: ['Content-Type', 'Idempotency-Key'],
+      allowedHeaders: ['Content-Type', 'Idempotency-Key', 'Request-ID'],
     }),
   )
   .use(openapi({ path: '/docs' }))
