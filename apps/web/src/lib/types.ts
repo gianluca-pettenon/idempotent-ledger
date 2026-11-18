@@ -30,6 +30,7 @@ export type Account = {
 };
 
 export type RunEntry = {
+  label: string;
   id: string;
   outcome: string;
   ms: number;

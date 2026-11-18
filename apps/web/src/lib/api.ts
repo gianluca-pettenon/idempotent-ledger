@@ -66,10 +66,12 @@ async function request<T>(path: string, options: RequestOptions = {}) {
 
 async function runRequest(
   params: MovementRequestParams,
+  requestIndex: number,
   idempotencyKey: string | null,
 ): Promise<RunEntry> {
   const startedAt = performance.now();
   const requestId = crypto.randomUUID();
+  const label = `Request ${requestIndex + 1}`;
   const { path, body } = REQUEST_BUILDER[params.operation](params);
   let outcome = 'failed';
   let detail: string | undefined;
@@ -91,6 +93,7 @@ async function runRequest(
   }
 
   return {
+    label,
     id: requestId,
     outcome,
     ms: Math.round(performance.now() - startedAt),
@@ -120,8 +123,8 @@ export async function runConcurrentRequests(params: RunRequestParams) {
   };
 
   return Promise.all(
-    Array.from({ length: CONCURRENCY_DEMO.REQUEST_COUNT }, () =>
-      runRequest(requestParams, idempotencyKey),
+    Array.from({ length: CONCURRENCY_DEMO.REQUEST_COUNT }, (_, requestIndex) =>
+      runRequest(requestParams, requestIndex, idempotencyKey),
     ),
   );
 }

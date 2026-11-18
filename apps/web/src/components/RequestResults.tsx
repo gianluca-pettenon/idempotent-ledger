@@ -34,17 +34,21 @@ export function RequestResults({ entries }: RequestResultsProps) {
       <ul className="space-y-2">
         {entries.map(entry => (
           <li
-            key={entry.id}
+            key={entry.label}
             className="rounded-2xl border border-border/60 bg-surface/70 px-3 py-2.5"
           >
-            <div className="flex items-baseline justify-between gap-4">
-              <p className="min-w-0 break-all text-foreground">
-                {entry.id}{' '}
-                <span className={getOutcomeClassName(entry.outcome)}>
-                  ({entry.outcome.toUpperCase()})
-                </span>
-              </p>
-              <span className="shrink-0 tabular-nums">{entry.ms} ms</span>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="shrink-0 text-foreground">{entry.label}</span>
+              <span className="min-w-0 break-all">{entry.id}</span>
+              <span
+                className={[
+                  'shrink-0 font-semibold',
+                  getOutcomeClassName(entry.outcome),
+                ].join(' ')}
+              >
+                {entry.outcome.toUpperCase()}
+              </span>
+              <span className="ml-auto shrink-0 tabular-nums">{entry.ms}ms</span>
             </div>
             {entry.detail ? (
               <p className="mt-1 text-[11px] text-muted-foreground">
