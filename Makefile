@@ -1,13 +1,16 @@
 -include .env
 export
 
-.PHONY: up migrate down
+.PHONY: up migrate down logs
 
 up:
-	docker compose up --build
+	docker compose up -d --build
 
 migrate:
 	docker compose run --rm --build api run apps/api/scripts/migrate.ts
 
 down:
 	docker compose down
+
+logs:
+	docker compose logs -f

@@ -43,5 +43,6 @@ API_PORT=3001
 ```bash
 make up       # stack
 make migrate  # create demo accounts; safe to re-run, each append expects no_stream
+make logs
 make down
 ```

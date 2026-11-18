@@ -1,4 +1,5 @@
-import { assertFunds, execute } from '@api/features/ledger/commands/command';
+import { assertFunds } from '@api/features/ledger/account';
+import { execute } from '@api/features/ledger/commands/command';
 import { EventType } from '@api/features/ledger/ledger.events';
 import { loadAccount } from '@api/features/ledger/ledger.store';
 

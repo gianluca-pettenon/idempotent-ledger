@@ -1,5 +1,4 @@
 import {
-  type Account,
   type Append,
   append,
   findResponse,
@@ -14,14 +13,6 @@ const MAX_ATTEMPTS = 10;
 
 type Decision = { appends: Append[]; balance: number };
 type Result = { balance: number; outcome: Outcome };
-
-export function assertFunds(account: Account, amount: number) {
-  if (account.balance < amount) {
-    throw new Error(`Insufficient funds: ${amount} > ${account.balance}`, {
-      cause: 422,
-    });
-  }
-}
 
 async function replay(key: string | null): Promise<Result | undefined> {
   if (!key) {

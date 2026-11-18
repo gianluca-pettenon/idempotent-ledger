@@ -1,10 +1,9 @@
-import { assertFunds, execute } from '@api/features/ledger/commands/command';
+import { assertFunds } from '@api/features/ledger/account';
+import { execute } from '@api/features/ledger/commands/command';
 import { EventType } from '@api/features/ledger/ledger.events';
 import { type Account, loadAccount } from '@api/features/ledger/ledger.store';
 
 function movements(from: Account, to: Account, amount: number) {
-  const transferId = Bun.randomUUIDv7();
-
   const movement = (
     account: Account,
     counterparty: Account,
@@ -12,7 +11,7 @@ function movements(from: Account, to: Account, amount: number) {
   ) => ({
     accountId: account.accountId,
     counterpartyAccountId: counterparty.accountId,
-    transferId,
+    transferId: Bun.randomUUIDv7(),
     amount,
     balance,
   });
