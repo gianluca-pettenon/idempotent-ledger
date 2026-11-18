@@ -6,6 +6,7 @@ import {
   jsonEvent,
   KurrentDBClient,
   NO_STREAM,
+  StreamNotFoundError,
   WrongExpectedVersionError,
 } from '@kurrent/kurrentdb-client';
 
@@ -46,6 +47,10 @@ async function readLast<T>(streamName: string): Promise<Saved<T> | undefined> {
 
     return { ...(event as T), revision: event.revision };
   } catch (error) {
+    if (error instanceof StreamNotFoundError) {
+      return;
+    }
+
     throw error;
   }
 }
