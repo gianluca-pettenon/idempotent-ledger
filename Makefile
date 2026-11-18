@@ -4,7 +4,7 @@ export
 .PHONY: up migrate down
 
 up:
-	docker compose up -d --build
+	docker compose up --build
 
 migrate:
 	docker compose run --rm --build api run apps/api/scripts/migrate.ts
